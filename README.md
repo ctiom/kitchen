@@ -50,11 +50,11 @@ recipe.UserAPI.User.Get.SetCooker(userService.GetUser) // Handler (Cooker)
 
 ## Guides
 
-  - [Lifecycle](./docs/guide/lifecycle.mdx)
-  - [Dependency](./docs/guide/dependency.mdx)
-  - [Web Api](./docs/guide/create_get_api.mdx)
-  - [Web Request](./docs/guide/request.mdx)
-  - [Web Response](./docs/guide/response.mdx)
+  - [Lifecycle](./docs/guide/lifecycle.md)
+  - [Dependency](./docs/guide/dependency.md)
+  - [Web Api](./docs/guide/create_get_api.md)
+  - [Web Request](./docs/guide/request.md)
+  - [Web Response](./docs/guide/response.md)
 
 ## Contributors
 - [Dillion Kum](https://github.com/dkishere)
