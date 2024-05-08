@@ -1,0 +1,25 @@
+# Pipeline
+
+Pipeline is a delegated menu aim at having additional rules & trace features over stateful data model manipulation, for example a application pipeline can define actions(dishes) available for each application status.
+
+```go
+    type OrderPipeline struct {
+		PipelineBase[*OrderPipeline, *DummyPipelineCookware, *PurchaseOrder]
+		Create  PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+		Pending struct {
+			PipelineStage[*DummyPipelineCookware, *PurchaseOrder]
+			SendRequest PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+		}
+		WaitForCallback struct {
+			PipelineStage[*DummyPipelineCookware, *PurchaseOrder]
+			Confirm PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+			Error   PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+		}
+	}
+
+	orderPl.Pending.SendRequest.SetCooker(func(i IPipelineContext[*DummyPipelineCookware, *PurchaseOrder], order *PurchaseOrder, a any) (output any, toSaveCanNil *PurchaseOrder, err error) {
+		fmt.Println("Pending.SendRequest")
+		//ctx.Tx()
+		return a, order, nil
+	}).SetNextStage(orderPl.WaitForCallback)
+```
