@@ -1,4 +1,4 @@
-module github.com/ctiom/kitchen
+module cd.codes/galaxy/kitchen
 
 go 1.19
 

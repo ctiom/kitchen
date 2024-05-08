@@ -35,17 +35,17 @@ func (p PipelineSqlTxCookware[M]) FinishTx(tx IDbTx, err error) error {
 	return err
 }
 
-type PurchaseOrder struct {
+type DepositOrder struct {
 	Id     int
 	Status PipelineStatus
 }
 
-func (p PurchaseOrder) PrimaryKey() any {
+func (p DepositOrder) PrimaryKey() any {
 	return p.Id
 }
 
 func (p PipelineSqlTxCookware[M]) GetModelById(ctx context.Context, id ...any) (model M, err error) {
-	return any(&PurchaseOrder{Status: "Pending"}).(M), nil
+	return any(&DepositOrder{Status: "Pending"}).(M), nil
 }
 
 func (p PipelineSqlTxCookware[M]) SaveModel(db IDbRunner, model M, oStatus PipelineStatus) error {

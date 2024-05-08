@@ -27,15 +27,15 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 )
 
-type Order struct {
-	MenuBase[*Order, DummyWorkerCookware]
+type Deposit struct {
+	MenuBase[*Deposit, DummyWorkerCookware]
 	New struct {
 		SetBase[DummyWorkerCookware]
 		Create Dish[DummyWorkerCookware, int, int]
 	}
 	Pending struct {
 		SetBase[DummyWorkerCookware]
-		List      Dish[DummyWorkerCookware, *Filter, []*PurchaseOrder]
+		List      Dish[DummyWorkerCookware, *Filter, []*DepositOrder]
 		TestA     Dish[DummyWorkerCookware, int, int]
 		TestGroup struct {
 			TestB Dish[DummyWorkerCookware, int, int]
@@ -52,15 +52,15 @@ type Order struct {
 		POST Dish[DummyWorkerCookware, any, any] `urlParam:"test"`
 	}
 }
-type OrderWithTracer struct {
-	MenuBase[*OrderWithTracer, DummyWorkerCookwareWithTracer]
+type DepositWithTracer struct {
+	MenuBase[*DepositWithTracer, DummyWorkerCookwareWithTracer]
 	New struct {
 		SetBase[DummyWorkerCookwareWithTracer]
 		Create Dish[DummyWorkerCookwareWithTracer, int, int]
 	}
 	Pending struct {
 		SetBase[DummyWorkerCookwareWithTracer]
-		List      Dish[DummyWorkerCookwareWithTracer, *Filter, []*PurchaseOrder]
+		List      Dish[DummyWorkerCookwareWithTracer, *Filter, []*DepositOrder]
 		TestA     Dish[DummyWorkerCookwareWithTracer, int, int]
 		TestGroup struct {
 			TestB Dish[DummyWorkerCookwareWithTracer, int, int]
@@ -88,57 +88,57 @@ func TestInit(t *testing.T) {
 		callStack []int
 	)
 
-	OrderWorker := InitMenu[*OrderWithTracer, DummyWorkerCookwareWithTracer](&OrderWithTracer{}, DummyWorkerCookwareWithTracer{
+	DepositWorker := InitMenu[*DepositWithTracer, DummyWorkerCookwareWithTracer](&DepositWithTracer{}, DummyWorkerCookwareWithTracer{
 		ITraceableCookware: NewZeroLogTraceableCookware(&logger),
 	})
-	OrderWorker.ConcurrentLimit(1) //only single thread
-	OrderWorker.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
-		res, err := OrderWorker.Util.TestC.Exec(ctx, input)
+	DepositWorker.ConcurrentLimit(1) //only single thread
+	DepositWorker.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+		res, err := DepositWorker.Util.TestC.Exec(ctx, input)
 		return res + 1, err
 	})
-	OrderWorker.Util.TestC.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+	DepositWorker.Util.TestC.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		//ctx.Bundle().Sql.Query("select 1")
 		return input + 1, nil
 	})
-	OrderWorker.Pending.TestAsync.SetAsyncCooker(context.Background(), 100, 1, func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+	DepositWorker.Pending.TestAsync.SetAsyncCooker(context.Background(), 100, 1, func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		fmt.Println(123)
 		return input + 999, nil
 	})
 
 	//should emit to MQ broadcast to whole cluster later
-	OrderWorker.Pending.TestA.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input int, output int, err error) {
+	DepositWorker.Pending.TestA.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input int, output int, err error) {
 		callStack = append(callStack, 1)
 	},
 		"tell log about this callback...", //desc for log
 	)
-	OrderWorker.Pending.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output any, err error) {
+	DepositWorker.Pending.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output any, err error) {
 		callStack = append(callStack, 2)
 	})
-	OrderWorker.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output any, err error) {
+	DepositWorker.AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output any, err error) {
 		callStack = append(callStack, 3)
 	})
-	OrderWorker.Pending.TestGroup.TestB.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+	DepositWorker.Pending.TestGroup.TestB.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		//ctx.Bundle().Sql.Query("select 1")
 		return input + 1, nil
 	})
 	input := 1
 	//if traffic growth up, we can have multiple instance and implement grpc & load balance inside Exec
-	res, err := OrderWorker.Pending.TestA.Exec(context.Background(), input)
-	assert.Equal(t, []int{3, 1, 2, 3}, callStack) //triggered all 3 events, and order again since we nested call order.Util.TestC
+	res, err := DepositWorker.Pending.TestA.Exec(context.Background(), input)
+	assert.Equal(t, []int{3, 1, 2, 3}, callStack) //triggered all 3 events, and deposit again since we nested call deposit.Util.TestC
 	assert.Equal(t, input+2, res)
 	assert.Nil(t, err)
 
-	res, err = OrderWorker.Pending.TestGroup.TestB.Exec(context.Background(), res)
+	res, err = DepositWorker.Pending.TestGroup.TestB.Exec(context.Background(), res)
 	assert.Nil(t, err)
 	assert.Equal(t, input+3, res)
-	assert.Equal(t, []int{3, 1, 2, 3, 2, 3}, callStack) //triggered all again except order.Exist.TestA
+	assert.Equal(t, []int{3, 1, 2, 3, 2, 3}, callStack) //triggered all again except deposit.Exist.TestA
 
-	err = OrderWorker.Pending.TestAsync.ExecAsync(context.Background(), 1, func(i int, err error) {
+	err = DepositWorker.Pending.TestAsync.ExecAsync(context.Background(), 1, func(i int, err error) {
 		assert.Equal(t, 1000, i)
 		assert.Nil(t, err)
 	}) //run as async
 	assert.Nil(t, err)
-	res, err = OrderWorker.Pending.TestAsync.Exec(context.Background(), 1) //run as sync
+	res, err = DepositWorker.Pending.TestAsync.Exec(context.Background(), 1) //run as sync
 	assert.Nil(t, err)
 	assert.Equal(t, 1000, res)
 
@@ -146,18 +146,18 @@ func TestInit(t *testing.T) {
 
 func TestUrl(t *testing.T) {
 
-	OrderWorker := InitMenu[*OrderWithTracer, DummyWorkerCookwareWithTracer](&OrderWithTracer{}, DummyWorkerCookwareWithTracer{
+	DepositWorker := InitMenu[*DepositWithTracer, DummyWorkerCookwareWithTracer](&DepositWithTracer{}, DummyWorkerCookwareWithTracer{
 		ITraceableCookware: NewZeroLogTraceableCookware(&logger),
 	})
 
-	method, urls, handler := OrderWorker.TestWebUrl.ServeHttp()
+	method, urls, handler := DepositWorker.TestWebUrl.ServeHttp()
 
 	assert.Equal(t, "POST", method)
 	assert.Equal(t, "notify/{order_id}", urls[0])
 	fmt.Println("1", urls)
 	assert.NotNil(t, handler)
 
-	method, urls, handler = OrderWorker.TestNamedMethod.POST.ServeHttp()
+	method, urls, handler = DepositWorker.TestNamedMethod.POST.ServeHttp()
 	fmt.Println("2", urls)
 	assert.Equal(t, "POST", method)
 }
@@ -243,45 +243,47 @@ func TestOtel(t *testing.T) {
 
 func TestPipeline(t *testing.T) {
 
-	type OrderPipeline struct {
-		PipelineBase[*OrderPipeline, *DummyPipelineCookware, *PurchaseOrder]
-		Create  PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+	type DepositPipeline struct {
+		PipelineBase[*DepositPipeline, *DummyPipelineCookware, *DepositOrder]
+		Create  PipelineAction[*DummyPipelineCookware, *DepositOrder, any, any]
 		Pending struct {
-			PipelineStage[*DummyPipelineCookware, *PurchaseOrder]
-			SendRequest PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+			PipelineStage[*DummyPipelineCookware, *DepositOrder]
+			SendRequest PipelineAction[*DummyPipelineCookware, *DepositOrder, any, any]
 		}
 		WaitForCallback struct {
-			PipelineStage[*DummyPipelineCookware, *PurchaseOrder]
-			Confirm PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
-			Error   PipelineAction[*DummyPipelineCookware, *PurchaseOrder, any, any]
+			PipelineStage[*DummyPipelineCookware, *DepositOrder]
+			Confirm PipelineAction[*DummyPipelineCookware, *DepositOrder, any, any]
+			Error   PipelineAction[*DummyPipelineCookware, *DepositOrder, any, any]
 		}
 	}
 
-	var dummyConn *sql.DB = nil
-
-	orderPl := InitPipeline[*DummyPipelineCookware, *PurchaseOrder, *OrderPipeline](&OrderPipeline{}, &DummyPipelineCookware{
+	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", "3.76.63.72", 5432, "postgres", "K6crBSh_WUZAPaJAj5DA", "oss")
+	// open database
+	conn, err := sql.Open("postgres", psqlconn)
+	assert.Nil(t, err)
+	deposit := InitPipeline[*DummyPipelineCookware, *DepositOrder, *DepositPipeline](&DepositPipeline{}, &DummyPipelineCookware{
 		DummyWorkerCookwareWithTracer: DummyWorkerCookwareWithTracer{
 			ITraceableCookware: NewZeroLogTraceableCookware(&logger),
 		},
-		PipelineSqlTxCookware: NewPipelineSqlTxCookware[*PurchaseOrder](dummyConn),
+		PipelineSqlTxCookware: NewPipelineSqlTxCookware[*DepositOrder](conn),
 	})
-	assert.NotNil(t, orderPl)
-	orderPl.Pending.SendRequest.SetCooker(func(i IPipelineContext[*DummyPipelineCookware, *PurchaseOrder], order *PurchaseOrder, a any) (output any, toSaveCanNil *PurchaseOrder, err error) {
+	assert.NotNil(t, deposit)
+	deposit.Pending.SendRequest.SetCooker(func(i IPipelineContext[*DummyPipelineCookware, *DepositOrder], order *DepositOrder, a any) (output any, toSaveCanNil *DepositOrder, err error) {
 		fmt.Println("Pending.SendRequest")
 		//ctx.Tx()
 		return a, order, nil
-	}).SetNextStage(orderPl.WaitForCallback)
+	}).SetNextStage(deposit.WaitForCallback)
 
-	model := &PurchaseOrder{Status: "Pending"}
-	res, err := orderPl.Pending.SendRequest.ExecWithModel(context.Background(), model, 1)
+	model := &DepositOrder{Status: "Pending"}
+	res, err := deposit.Pending.SendRequest.ExecWithModel(context.Background(), model, 1)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, res)
-	assert.Equal(t, orderPl.WaitForCallback.Status(), model.Status)
+	assert.Equal(t, deposit.WaitForCallback.Status(), model.Status)
 
-	res, err = orderPl.Pending.SendRequest.ExecById(context.Background(), 1, 1) //get from dep
+	res, err = deposit.Pending.SendRequest.ExecById(context.Background(), 1, 1) //get from dep
 	assert.Nil(t, err)
 	assert.Equal(t, 1, res)
-	assert.Equal(t, orderPl.WaitForCallback.Status(), model.Status)
+	assert.Equal(t, deposit.WaitForCallback.Status(), model.Status)
 
 }
 
@@ -556,49 +558,49 @@ type DummyQueryParamInput struct {
 
 type DummyPipelineCookware struct {
 	DummyWorkerCookwareWithTracer
-	*PipelineSqlTxCookware[*PurchaseOrder]
+	*PipelineSqlTxCookware[*DepositOrder]
 }
 
-func (d PurchaseOrder) GetStatus() PipelineStatus {
+func (d DepositOrder) GetStatus() PipelineStatus {
 	return d.Status
 }
 
-func (d *PurchaseOrder) SetStatus(status PipelineStatus) {
+func (d *DepositOrder) SetStatus(status PipelineStatus) {
 	d.Status = status
 }
 
 func TestRoutineLimit(t *testing.T) {
-	OrderWorkerWithTracer.ConcurrentLimit(10)
-	OrderWorkerWithTracer.Pending.TestA.ConcurrentLimit(5)
+	DepositWorkerWithTracer.ConcurrentLimit(10)
+	DepositWorkerWithTracer.Pending.TestA.ConcurrentLimit(5)
 	var run int64
-	OrderWorkerWithTracer.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+	DepositWorkerWithTracer.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		time.Sleep(time.Millisecond * 100)
 		atomic.AddInt64(&run, 1)
 		return input + 1, nil
 	})
 	for i := 0; i < 10; i++ {
-		go OrderWorker.Pending.TestA.Exec(context.Background(), i)
+		go DepositWorker.Pending.TestA.Exec(context.Background(), i)
 	}
 	time.Sleep(time.Millisecond * 150)
 	assert.Equal(t, int64(5), run)
 }
 
 var (
-	OrderWorker           *Order
-	OrderWorkerWithTracer *OrderWithTracer
+	DepositWorker           *Deposit
+	DepositWorkerWithTracer *DepositWithTracer
 )
 
 func init() {
-	OrderWorker = InitMenu[*Order, DummyWorkerCookware](&Order{}, DummyWorkerCookware{})
-	OrderWorkerWithTracer = InitMenu[*OrderWithTracer, DummyWorkerCookwareWithTracer](&OrderWithTracer{}, DummyWorkerCookwareWithTracer{
+	DepositWorker = InitMenu[*Deposit, DummyWorkerCookware](&Deposit{}, DummyWorkerCookware{})
+	DepositWorkerWithTracer = InitMenu[*DepositWithTracer, DummyWorkerCookwareWithTracer](&DepositWithTracer{}, DummyWorkerCookwareWithTracer{
 		ITraceableCookware: NewZeroLogTraceableCookware(&logger),
 	})
-	OrderWorker.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookware], input int) (output int, err error) {
+	DepositWorker.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookware], input int) (output int, err error) {
 		return input + 1, nil
 	}).AfterCook(func(ctx IContext[DummyWorkerCookware], input, output int, err error) {
 		input++
 	})
-	OrderWorkerWithTracer.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
+	DepositWorkerWithTracer.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		return input + 1, nil
 	}).AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output int, err error) {
 		input++
@@ -608,14 +610,14 @@ func init() {
 func BenchmarkNewCtx(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		OrderWorker.Pending.TestA.newCtx(ctx)
+		DepositWorker.Pending.TestA.newCtx(ctx)
 	}
 }
 func BenchmarkExec(b *testing.B) {
 	var res int
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		if res, _ = OrderWorker.Pending.TestA.Exec(ctx, i); res != i+1 {
+		if res, _ = DepositWorker.Pending.TestA.Exec(ctx, i); res != i+1 {
 			b.Fail()
 		}
 	}
@@ -624,7 +626,7 @@ func BenchmarkExecWithTracer(b *testing.B) {
 	var res int
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		if res, _ = OrderWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
+		if res, _ = DepositWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
 			b.Fail()
 		}
 	}
@@ -634,10 +636,10 @@ func BenchmarkExecWithTracerOff(b *testing.B) {
 		res    int
 		logger = logger.Level(zerolog.Disabled)
 	)
-	OrderWorkerWithTracer.Dependency().ITraceableCookware.(*ZeroLogTraceableCookware).Logger = &logger
+	DepositWorkerWithTracer.Dependency().ITraceableCookware.(*ZeroLogTraceableCookware).Logger = &logger
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
-		if res, _ = OrderWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
+		if res, _ = DepositWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
 			b.Fail()
 		}
 	}

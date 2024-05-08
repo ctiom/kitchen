@@ -2,7 +2,7 @@
 
 ## Introduction
 
-Kitchen is a framework that's designed in CTIOM team to build expendable, consistent and debuggable modular monolith service.
+Kitchen is a framework that's designed in Champion Tech to build expendable, consistent and debuggable modular monolith service.
 
 The main philosophy of Kitchen is to call methods indirectly. Since the methods are indirectly called, we can easily monitor, trace and even forward the request foreign node when necessary.
 
@@ -26,12 +26,6 @@ There are few components in the framework that are used to build the API.
 
 ```go
 
-type SimpleDependency struct {
-    Db *sql.DB
-    //Tracer
-    //Logger
-}
-
 type UserApi struct { // Menu
 	kitchen.MenuBase[*UserApi, *SimpleDependency] // Dependency of Menu
 	User struct { // SubMenu / Set
@@ -46,7 +40,7 @@ recipe.UserAPI.User.Get.SetCooker(userService.GetUser) // Handler (Cooker)
 
 `Menu` is a collection of `SubMenu` and `Dish`.
 
-`Cookware` is the dependency struct that inject the dependencies to the `Cooker`.
+`Dependency` is the struct that inject the dependencies to the `Cooker`.
 
 `SubMenu` is a collection of `Dish`.
 
@@ -54,14 +48,12 @@ recipe.UserAPI.User.Get.SetCooker(userService.GetUser) // Handler (Cooker)
 
 `Cooker` is the actual handler.
 
-
 ## Guides
-- Web Apis
-    - [Lifecycle](./guide/lifecycle.mdx)
-    - [Dependency](./guide/dependency.mdx)
-    - [Get Api](./guide/create_get_api.mdx)
-    - [Web Request](./guide/request.mdx)
-    - [Web Response](./guide/response.mdx)
+- [Lifecycle](./guide/lifecycle.md)
+- [Dependency](./guide/dependency.md)
+- [Get Api](./guide/create_get_api.md)
+- [Web Request](./guide/request.md)
+- [Web Response](./guide/response.md)
 
 ## Credits
 - [Dillion Kum](https://github.com/dkishere)
