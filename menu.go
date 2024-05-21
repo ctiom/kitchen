@@ -1,6 +1,9 @@
 package kitchen
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
 var (
 	typeOfISet = reflect.TypeOf((*ISet)(nil)).Elem()
@@ -8,10 +11,12 @@ var (
 
 type MenuBase[WPtr iMenu[D], D ICookware] struct {
 	cookbook[D, any, any]
-	name     string
-	cookware D
-	dishes   []iDish[D]
-	path     *string
+	name           string
+	cookware       D
+	dishes         []iDish[D]
+	path           *string
+	manager        IManager
+	idUnderManager uint32
 }
 
 func InitMenu[W iMenu[D], D ICookware](menuPtr W, bundle D) W {
@@ -60,6 +65,19 @@ func iterateStruct[D ICookware](s any, parentMenu iMenu[D], set iSet[D], bundle 
 	return nodes
 }
 
+func (b *MenuBase[W, D]) Manager() IManager {
+	return b.manager
+}
+
+func (b *MenuBase[W, D]) ID() uint32 {
+	return b.idUnderManager
+}
+
+func (b *MenuBase[W, D]) setManager(m IManager, id uint32) {
+	b.idUnderManager = id
+	b.manager = m.(*Manager)
+}
+
 func (b *MenuBase[W, D]) OverridePath(path string) *MenuBase[W, D] {
 	b.path = &path
 	return b
@@ -67,14 +85,17 @@ func (b *MenuBase[W, D]) OverridePath(path string) *MenuBase[W, D] {
 
 func (b *MenuBase[W, D]) initWithoutFields(w iMenu[D], bundle D) {
 	var (
-		menuValue = reflect.ValueOf(w).Elem()
-		menuType  = menuValue.Type()
+		menuValue        = reflect.ValueOf(w).Elem()
+		menuType         = menuValue.Type()
+		concurrent int64 = 0
 	)
 	_, b.isTraceable = any(bundle).(ITraceableCookware)
 	b.instance = w
 	b.name = menuType.Name()
 	_, b.isInheritableCookware = any(bundle).(ICookwareInheritable)
 	_, b.isWebWrapperCookware = any(bundle).(IWebCookwareWithDataWrapper)
+	b.concurrent = &concurrent
+	b.locker = &sync.Mutex{}
 	w.setCookware(bundle)
 
 	w.setName(menuType.Name())

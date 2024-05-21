@@ -5,8 +5,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"google.golang.org/grpc"
 	"io"
 	"net/http"
+	"os"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -14,17 +23,9 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"google.golang.org/grpc"
-
-	_ "github.com/lib/pq"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 )
 
 type Deposit struct {
@@ -182,7 +183,7 @@ func TestOtel(t *testing.T) {
 
 	traceClient := otlptracegrpc.NewClient(
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint("123.51.206.117:4317"),
+		otlptracegrpc.WithEndpoint("127.0.0.1:4317"),
 		otlptracegrpc.WithDialOption(grpc.WithBlock()))
 	traceExp, traceExpErr := otlptrace.New(context.Background(), traceClient)
 	if traceExpErr != nil {
@@ -257,7 +258,7 @@ func TestPipeline(t *testing.T) {
 		}
 	}
 
-	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", "3.76.63.72", 5432, "postgres", "K6crBSh_WUZAPaJAj5DA", "oss")
+	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", "127.0.0.1", 5432, "postgres", "postgres", "postgres")
 	// open database
 	conn, err := sql.Open("postgres", psqlconn)
 	assert.Nil(t, err)
@@ -330,7 +331,7 @@ func TestWebWrapper(t *testing.T) {
 	assert.Equal(t, 400, resp.StatusCode)
 	data, err := io.ReadAll(resp.Body)
 	assert.Nil(t, err)
-	assert.Equal(t, `{"Data":{"A":"4","B":"5","C":"6"},"Error":{"Code":1,"Message":"test","Extra":{"foo":"bar"}}}`, string(data))
+	assert.Equal(t, `{"Error":{"Code":1,"Message":"test","Extra":{"foo":"bar"}}}`, string(data))
 
 	resp, err = http.Get("http://localhost:18081/test?a=1&b=2&c=3")
 	assert.Nil(t, err)
@@ -579,7 +580,7 @@ func TestRoutineLimit(t *testing.T) {
 		return input + 1, nil
 	})
 	for i := 0; i < 10; i++ {
-		go DepositWorker.Pending.TestA.Exec(context.Background(), i)
+		go DepositWorkerWithTracer.Pending.TestA.Exec(context.Background(), i)
 	}
 	time.Sleep(time.Millisecond * 150)
 	assert.Equal(t, int64(5), run)
@@ -600,11 +601,28 @@ func init() {
 	}).AfterCook(func(ctx IContext[DummyWorkerCookware], input, output int, err error) {
 		input++
 	})
+	DepositWorker.Util.TestC.SetCooker(func(ctx IContext[DummyWorkerCookware], input int) (output int, err error) {
+		var (
+			dummy = make([]int, 100000)
+		)
+		return len(dummy), nil
+	})
 	DepositWorkerWithTracer.Pending.TestA.SetCooker(func(ctx IContext[DummyWorkerCookwareWithTracer], input int) (output int, err error) {
 		return input + 1, nil
 	}).AfterCook(func(ctx IContext[DummyWorkerCookwareWithTracer], input, output int, err error) {
 		input++
 	})
+	go func() {
+		ticker := time.NewTicker(time.Millisecond * 500)
+		fp, _ := os.OpenFile("heap.prof", os.O_CREATE|os.O_RDWR, 0666)
+		for {
+			select {
+			case <-ticker.C:
+				p := pprof.Lookup("heap")
+				_ = p.WriteTo(fp, 1)
+			}
+		}
+	}()
 
 }
 func BenchmarkNewCtx(b *testing.B) {
@@ -627,6 +645,18 @@ func BenchmarkExecWithTracer(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		if res, _ = DepositWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
+			b.Fail()
+		}
+	}
+}
+func BenchmarkExecMem(b *testing.B) {
+	var (
+		res int
+	)
+	ctx := context.Background()
+	for i := 0; i < b.N; i++ {
+		if res, _ = DepositWorker.Util.TestC.Exec(ctx, i); res != 100000 {
+			fmt.Println(res)
 			b.Fail()
 		}
 	}

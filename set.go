@@ -2,6 +2,7 @@ package kitchen
 
 import (
 	"reflect"
+	"sync"
 )
 
 var (
@@ -24,10 +25,15 @@ func initSet[D ICookware](menu iMenu[D], group iSet[D], parent iSet[D], name str
 }
 
 func (s *SetBase[D]) init(p iMenu[D], group, parent iSet[D], name string) {
+	var (
+		concurrent int64 = 0
+	)
 	s._menu = p
 	s.self = group
 	s.name = name
 	s.instance = group
+	s.concurrent = &concurrent
+	s.locker = &sync.Mutex{}
 	if parent != nil {
 		s.parentSet = parent.Tree()
 	}

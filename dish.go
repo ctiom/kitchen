@@ -28,12 +28,8 @@ type Dish[D ICookware, I any, O any] struct {
 	menu             iMenu[D]
 	name             string
 	cooker           DishCooker[D, I, O]
-	panicRecover     bool
 	newInput         func() I
-	id               uint32
 	asyncChan        chan asyncTask[D, I, O]
-	isWebDep         bool
-	isWebInput       bool
 	webUrlParamMap   []int
 	webQueryParamMap []nameAndPos
 	path             *string
@@ -43,6 +39,10 @@ type Dish[D ICookware, I any, O any] struct {
 	tags             []string
 	method           string
 	security         []string
+	id               uint32
+	isWebDep         bool
+	isWebInput       bool
+	panicRecover     bool
 }
 
 type asyncTask[D ICookware, I, O any] struct {
@@ -60,6 +60,11 @@ func (a *Dish[D, I, O]) extractTags(tags reflect.StructTag, key string, fn func(
 }
 
 func (a *Dish[D, I, O]) init(parent iCookbook[D], action iDish[D], name string, tags reflect.StructTag) {
+	var (
+		concurrent int64 = 0
+	)
+	a.concurrent = &concurrent
+	a.locker = &sync.Mutex{}
 	a.name = name
 	if val, ok := tags.Lookup("path"); ok {
 		a.name = val
@@ -284,7 +289,22 @@ func (a *Dish[D, I, O]) SetCooker(cooker DishCooker[D, I, O]) *Dish[D, I, O] {
 		close(a.asyncChan)
 		a.asyncChan = nil
 	}
-	a.cooker = cooker
+	if a.menu.Manager() != nil {
+		var mgr = a.menu.Manager()
+		a.cooker = func(ctx IContext[D], input I) (output O, err error) {
+			var orderOutput any
+			orderOutput, err = mgr.Order(a, input)
+			if err == errRunInLocal {
+				return cooker(ctx, input)
+			} else if err != nil {
+				return
+			}
+			output = orderOutput.(O)
+			return
+		}
+	} else {
+		a.cooker = cooker
+	}
 	return a
 }
 
@@ -309,7 +329,7 @@ func (a *Dish[D, I, O]) Cook(ctx context.Context, input I) (output O, err error)
 	if a.asyncChan != nil {
 		l := &sync.Mutex{}
 		l.Lock()
-		err = a.ExecAsync(ctx, input, func(o O, e error) {
+		err = a.CookAsync(ctx, input, func(o O, e error) {
 			output = o
 			err = e
 			l.Unlock()

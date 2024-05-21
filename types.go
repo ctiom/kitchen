@@ -49,11 +49,10 @@ type (
 		logSideEffect(ctx context.Context, instanceName string, toLog []any) (context.Context, ITraceSpan)
 	}
 	IInstance interface {
-		concurrentLimit() int64
-		ConcurrentLimit(int64)
 		ToSwagger(prefix []string, options ...SwaggerOption) (api map[string]any, types map[string]any)
 		Name() string
 		Menu() IMenu
+		ifLock() func()
 	}
 	iCookbook[D ICookware] interface {
 		IInstance
@@ -64,12 +63,24 @@ type (
 		isTraceableDep() bool
 		isInheritableDep() bool
 	}
+	IKitchen interface {
+		Order(dish IDish, input any) (output interface{}, err error)
+		canHandle(uint32, int32) bool
+	}
+	IManager interface {
+		AddMenu(menuInitializer func() IMenu) IManager
+		AddKitchen(IKitchen) IManager
+		Order(dish IDish, input any) (output interface{}, err error)
+	}
 	IMenu interface {
 		IInstance
 		Name() string
 		SwaggerOption(SwaggerOption) IMenu
 		swaggerOption() SwaggerOption
 		isDataWrapper() bool
+		Manager() IManager
+		setManager(m IManager, id uint32)
+		ID() uint32
 	}
 	iMenu[D ICookware] interface {
 		IMenu
