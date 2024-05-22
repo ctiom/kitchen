@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"cd.codes/galaxy/kitchen/stringMap"
+	"github.com/ctiom/kitchen/stringMap"
 	"github.com/gorilla/mux"
 	"github.com/iancoleman/strcase"
 	"google.golang.org/protobuf/proto"

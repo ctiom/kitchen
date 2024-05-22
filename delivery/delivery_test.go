@@ -1,88 +1,33 @@
 package delivery
 
 import (
-	"encoding/binary"
-	"fmt"
-	"io"
-	"math/rand"
-	"net"
 	"testing"
+	"time"
 )
 
-func BenchmarkNet(b *testing.B) {
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			socket, err := net.Dial("tcp", "127.0.0.1:5001")
-			if err != nil {
-				b.Error(err)
-			}
-			if socket == nil {
-				b.Error("nil socket")
-			}
-			var (
-				r        = rand.Intn(100) * 100
-				numBytes = make([]byte, r+4)
-				buf      = make([]byte, 110000)
-				l        uint32
-			)
-			binary.BigEndian.PutUint32(numBytes, uint32(r))
-			_, err = socket.Write(numBytes)
-			if err != nil {
-				b.Error(err)
-			}
-			n, err := socket.Read(buf)
-			if err == io.EOF || err == nil {
-				l = binary.BigEndian.Uint32(buf[:4])
-				if uint32(n) != l+4 {
-					fmt.Println("return invalid", l+4, n)
-				}
-			} else {
-				b.Error(err)
-			}
-			_ = socket.Close()
-		}
-	})
+var (
+	mainServer  ILogistic
+	nodeServer1 ILogistic
+)
+
+func init() {
+	var (
+		err error
+	)
+	mainServer, err = NewServer("tcp://127.0.0.1:12345", "", []string{"foo", "bar"})
+	if err != nil {
+		panic(err)
+	}
+	nodeServer1, err = NewServer("tcp://127.0.0.1:23456", "tcp://127.0.0.1:12345", []string{"foo", "bar"})
+	if err != nil {
+		panic(err)
+	}
+	time.Sleep(time.Millisecond * 100)
 }
-func BenchmarkEVIO(b *testing.B) {
-	//var (
-	//	block    int32 = 0
-	//	blockPtr       = &block
-	//)
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			socket, err := net.Dial("tcp", "127.0.0.1:5000")
-			if err != nil {
-				b.Error(err)
-			}
-			if socket == nil {
-				b.Error("nil socket")
-			}
-			var (
-				r        = rand.Intn(99)*100 + 100
-				numBytes = make([]byte, r+4)
-				buf      = make([]byte, 110000)
-				l        uint32
-			)
-			binary.BigEndian.PutUint32(numBytes, uint32(r))
-			_, err = socket.Write(numBytes)
-			if err != nil {
-				b.Error(err)
-			}
-			//atomic.AddInt32(blockPtr, 1)
-			n, err := socket.Read(buf)
-			//fmt.Println("read", n, err,
-			//	atomic.AddInt32(blockPtr, -1))
-			if err == io.EOF || err == nil {
-				l = binary.BigEndian.Uint32(buf[:4])
-				if uint32(n) != l+4 {
-					fmt.Println("return invalid", l+4, n)
-				}
-			} else {
-				b.Error(err)
-			}
-			_ = socket.Close()
-		}
-	})
+
+func TestSwitch(t *testing.T) {
+	nodeServer1.SwitchHost("tcp://127.0.0.1:12345")
+	time.Sleep(time.Millisecond * 100)
 }
 
 //func TestServer(t *testing.T) {

@@ -1,7 +1,7 @@
 package kitchen
 
 import (
-	"cd.codes/galaxy/kitchen/delivery"
+	"github.com/ctiom/kitchen/delivery"
 	"errors"
 	"sync"
 	"sync/atomic"
