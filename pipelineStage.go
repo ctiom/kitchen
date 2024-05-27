@@ -22,11 +22,11 @@ func (ps *PipelineStage[D, M]) initStage(parent iCookbook[D], stage iPipelineSta
 		ps._pipeline = parent.(iPipeline[D, M])
 	} else {
 		ps._pipeline = parent.(iPipelineStage[D, M]).pipeline()
-		ps.parentSet = parent.(iPipelineStage[D, M]).Tree()
+		ps.parentSet = parent.(iPipelineStage[D, M]).tree()
 	}
 	ps.self = stage
 	ps.name = string(stageName)
-	ps.nodes = iteratePipelineStruct(stage, ps._pipeline, nil, stage, ps._pipeline.Cookware())
+	ps.nodes = iteratePipelineStruct(stage, ps._pipeline, nil, stage, ps._pipeline.cookware())
 }
 
 func (ps PipelineStage[D, M]) pipeline() iPipeline[D, M] {

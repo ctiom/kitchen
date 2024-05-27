@@ -1,6 +1,12 @@
 package kitchen
 
-import "reflect"
+import (
+	"context"
+	"errors"
+	"github.com/preform/kitchen/delivery"
+	"reflect"
+	"sync"
+)
 
 var (
 	typeOfISet = reflect.TypeOf((*ISet)(nil)).Elem()
@@ -8,10 +14,13 @@ var (
 
 type MenuBase[WPtr iMenu[D], D ICookware] struct {
 	cookbook[D, any, any]
-	name     string
-	cookware D
-	dishes   []iDish[D]
-	path     *string
+	name           string
+	menuCookware   D
+	dishes         []iDish[D]
+	dishCnt        uint32
+	path           *string
+	manager        IManager
+	idUnderManager uint32
 }
 
 func InitMenu[W iMenu[D], D ICookware](menuPtr W, bundle D) W {
@@ -31,33 +40,52 @@ func iterateStruct[D ICookware](s any, parentMenu iMenu[D], set iSet[D], bundle 
 		sType     = sValue.Type()
 		nodes     []iCookbook[D]
 		path      string
+		ok        bool
 	)
 	for i, l := 0, sType.NumField(); i < l; i++ {
 		fieldType = sType.Field(i)
 		if fieldType.IsExported() && !fieldType.Anonymous {
 			path = fieldType.Name
-			if fieldType.Type.Implements(typeOfDish) {
-				action := sValue.Field(i).Addr().Interface()
+			node := sValue.Field(i).Addr().Interface()
+			if _, ok = node.(IDish); ok {
 				if set != nil {
-					initDish(set.(iCookbook[D]), action.(iDish[D]), path, fieldType.Tag)
+					initDish(set.(iCookbook[D]), node.(iDish[D]), path, fieldType.Tag)
 				} else {
-					initDish(parentMenu.(iCookbook[D]), action.(iDish[D]), path, fieldType.Tag)
+					initDish(parentMenu.(iCookbook[D]), node.(iDish[D]), path, fieldType.Tag)
 				}
-				nodes = append(nodes, action.(iCookbook[D]))
-			} else if fieldType.Type.Implements(typeOfISet) {
-				group := sValue.Field(i).Addr().Interface()
-				initSet(parentMenu, group.(iSet[D]), set, path)
-				nodes = append(nodes, group.(iCookbook[D]))
-			} else if fieldType.Type.Implements(typeOfMenu) {
-				menu := sValue.Field(i).Addr().Interface()
-				InitMenu(menu.(iMenu[D]), bundle)
-				nodes = append(nodes, menu.(iCookbook[D]))
+				nodes = append(nodes, node.(iCookbook[D]))
+			} else if _, ok = node.(ISet); ok {
+				initSet(parentMenu, node.(iSet[D]), set, path)
+				nodes = append(nodes, node.(iCookbook[D]))
+			} else if _, ok = node.(IMenu); ok {
+				InitMenu(node.(iMenu[D]), bundle)
+				nodes = append(nodes, node.(iCookbook[D]))
 			} else if fieldType.Type.Kind() == reflect.Struct {
 				nodes = append(nodes, iterateStruct[D](sValue.Field(i).Addr().Interface(), parentMenu, set, bundle)...)
 			}
 		}
 	}
 	return nodes
+}
+
+func (r MenuBase[W, D]) Cookware() ICookware {
+	return r.menuCookware
+}
+
+func (b *MenuBase[W, D]) Manager() IManager {
+	return b.manager
+}
+
+func (b *MenuBase[W, D]) ID() uint32 {
+	return b.idUnderManager
+}
+
+func (b *MenuBase[W, D]) setManager(m IManager, id uint32) {
+	b.idUnderManager = id
+	b.manager = m.(*Manager)
+	for _, d := range b.dishes {
+		d.refreshCooker()
+	}
 }
 
 func (b *MenuBase[W, D]) OverridePath(path string) *MenuBase[W, D] {
@@ -75,6 +103,9 @@ func (b *MenuBase[W, D]) initWithoutFields(w iMenu[D], bundle D) {
 	b.name = menuType.Name()
 	_, b.isInheritableCookware = any(bundle).(ICookwareInheritable)
 	_, b.isWebWrapperCookware = any(bundle).(IWebCookwareWithDataWrapper)
+	b.concurrentLimit = new(int32)
+	b.running = new(int32)
+	b.locker = &sync.Mutex{}
 	w.setCookware(bundle)
 
 	w.setName(menuType.Name())
@@ -82,6 +113,7 @@ func (b *MenuBase[W, D]) initWithoutFields(w iMenu[D], bundle D) {
 
 func (b *MenuBase[W, D]) pushDish(action iDish[D]) int {
 	b.dishes = append(b.dishes, action)
+	b.dishCnt++
 	return len(b.dishes) - 1
 }
 
@@ -108,8 +140,8 @@ func (b MenuBase[W, D]) Name() string {
 	return b.name
 }
 
-func (b *MenuBase[W, D]) setCookware(bundle D) {
-	b.cookware = bundle
+func (b *MenuBase[W, D]) setCookware(cookware D) {
+	b.menuCookware = cookware
 }
 
 func (b *MenuBase[W, D]) isDataWrapper() bool {
@@ -117,29 +149,21 @@ func (b *MenuBase[W, D]) isDataWrapper() bool {
 }
 
 func (b MenuBase[W, D]) Dependency() D {
-	return b.cookware
+	return b.menuCookware
 }
 
-func (b MenuBase[W, D]) Cookware() D {
-	return b.cookware
+func (b MenuBase[W, D]) cookware() D {
+	return b.menuCookware
 }
 
-func (b MenuBase[W, D]) swaggerOption() SwaggerOption {
-	return SwaggerOption{}
-}
+var errDishNotFound = errors.New("dish not found")
 
-func (b MenuBase[W, D]) SwaggerOption(opt SwaggerOption) IMenu {
-	return &menuWithSwaggerOpt{
-		IMenu:  any(b.instance).(IMenu),
-		option: opt,
+func (b MenuBase[W, D]) orderDish(ctx context.Context, order *delivery.Order) {
+	if order.DishId >= b.dishCnt {
+		_ = order.Response(nil, errDishNotFound)
+		return
 	}
-}
-
-type menuWithSwaggerOpt struct {
-	IMenu
-	option SwaggerOption
-}
-
-func (w menuWithSwaggerOpt) swaggerOption() SwaggerOption {
-	return w.option
+	output, err := b.dishes[order.DishId].cookByte(ctx, order.Input)
+	_ = order.Response(output, err)
+	return
 }

@@ -27,29 +27,28 @@ func iteratePipelineStruct[D IPipelineCookware[M], M IPipelineModel](s any, pipe
 		fieldType reflect.StructField
 		nodes     []iCookbook[D]
 		path      string
+		ok        bool
 	)
 
 	for i, l := 0, ppType.NumField(); i < l; i++ {
 		fieldType = ppType.Field(i)
 		path = fieldType.Name
 		if fieldType.IsExported() && !fieldType.Anonymous {
-			if fieldType.Type.Implements(typeOfPipelineAction) {
-				action := ppValue.Field(i).Addr().Interface()
-				initPipelineAction(pipeline.(iCookbook[D]), action.(iPipelineAction[D, M]), path, fieldType.Tag)
-				nodes = append(nodes, action.(iCookbook[D]))
-			} else if fieldType.Type.Implements(typeOfDish) {
-				action := ppValue.Field(i).Addr().Interface()
-				initDish(pipeline.(iCookbook[D]), action.(iDish[D]), path, fieldType.Tag)
-				nodes = append(nodes, action.(iCookbook[D]))
-			} else if fieldType.Type.Implements(typeOfISet) {
-				set := ppValue.Field(i).Addr().Interface()
-				if stage, ok := set.(iPipelineStage[D, M]); ok {
-					initPipelineStage(pipeline, stage, path)
-					nodes = append(nodes, stage.(iCookbook[D]))
-					stageByStatus[string(stage.Status())] = stage
+			node := ppValue.Field(i).Addr().Interface()
+			if _, ok = node.(iPipelineAction[D, M]); ok {
+				initPipelineAction(pipeline.(iCookbook[D]), node.(iPipelineAction[D, M]), path, fieldType.Tag)
+				nodes = append(nodes, node.(iCookbook[D]))
+			} else if _, ok = node.(iDish[D]); ok {
+				initDish(pipeline.(iCookbook[D]), node.(iDish[D]), path, fieldType.Tag)
+				nodes = append(nodes, node.(iCookbook[D]))
+			} else if _, ok = node.(iSet[D]); ok {
+				if _, ok = node.(iPipelineStage[D, M]); ok {
+					initPipelineStage(pipeline, node.(iPipelineStage[D, M]), path)
+					nodes = append(nodes, node.(iCookbook[D]))
+					stageByStatus[string(node.(iPipelineStage[D, M]).Status())] = node.(iPipelineStage[D, M])
 				} else {
-					initSet(pipeline.(iMenu[D]), set.(iSet[D]), stage.(iSet[D]), path)
-					nodes = append(nodes, set.(iCookbook[D]))
+					initSet(pipeline.(iMenu[D]), node.(iSet[D]), stage.(iSet[D]), path)
+					nodes = append(nodes, node.(iCookbook[D]))
 				}
 			} else if fieldType.Type.Kind() == reflect.Struct {
 				nodes = append(nodes, iteratePipelineStruct[D, M](ppValue.Field(i).Addr().Interface(), pipeline, stageByStatus, stage, bundle)...)
@@ -69,4 +68,11 @@ func (p *PipelineBase[P, D, M]) GetActionsForStatus(status string) []IPipelineAc
 func (p *PipelineBase[P, D, M]) GetActionsForModel(model any) (string, []IPipelineAction) {
 	status := string(model.(IPipelineModel).GetStatus())
 	return status, p.GetActionsForStatus(status)
+}
+
+func (p PipelineBase[P, D, M]) NewModel() IPipelineModel {
+	var (
+		m M
+	)
+	return m
 }

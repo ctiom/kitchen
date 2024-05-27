@@ -3,7 +3,9 @@ package kitchen
 import (
 	"context"
 	"database/sql"
+	"github.com/preform/kitchen/delivery"
 	"net/http"
+	"net/url"
 	"reflect"
 )
 
@@ -14,24 +16,25 @@ type (
 
 	AfterListenHandlers[D ICookware, I any, O any] func(ctx IContext[D], input I, output O, err error)
 
-	IWebParsableInput interface {
-		ParseRequestToInput(r *http.Request) (raw []byte, err error)
+	iMarshaller[I any] interface {
+		unmarshal(raw []byte) (output I, recycle func(any), err error)
+		marshal(output I) (outputData []byte, err error)
+	}
+	IWebBundle interface {
+		Ctx() context.Context
+		Method() string
+		Body() ([]byte, error)
+		Url() *url.URL
+		UrlParams() map[string]string
+		Headers() any
+		Raw() any
+		Response() http.ResponseWriter
 	}
 	ICookware interface {
 	}
 	ICookwareInheritable interface {
 		ICookware
 		Inherit(ICookware) ICookware
-	}
-	IWebCookware interface {
-		ICookware
-		RequestParser(action IDish, w http.ResponseWriter, r *http.Request) (IWebCookware, error) //parse user, permission
-	}
-	WebErr struct {
-		Err        error
-		HttpStatus int
-		Extra      map[string]string
-		ErrorCode  int32
 	}
 	IWebCookwareWithDataWrapper interface {
 		ICookware
@@ -49,27 +52,40 @@ type (
 		logSideEffect(ctx context.Context, instanceName string, toLog []any) (context.Context, ITraceSpan)
 	}
 	IInstance interface {
-		concurrentLimit() int64
-		ConcurrentLimit(int64)
-		ToSwagger(prefix []string, options ...SwaggerOption) (api map[string]any, types map[string]any)
 		Name() string
 		Menu() IMenu
+		Nodes() []IInstance
 	}
 	iCookbook[D ICookware] interface {
 		IInstance
+		ifLock() func()
 		inherit(...iCookbook[D])
 		emitAfterCook(IContext[D], any, any, error)
 		emitAfterExec(IContext[D], any, any, error)
-		ToRouter(prefix ...string) map[string]map[string]http.HandlerFunc
 		isTraceableDep() bool
 		isInheritableDep() bool
+	}
+	IKitchen interface {
+		Order(dish IDish, input any) (output interface{}, err error)
+		canHandle(uint32, int32) bool
+	}
+	IManager interface {
+		AddMenu(menuInitializer func() IMenu) IManager
+		SetMainKitchen(url string, port uint16) IManager
+		Order(dish IDish) (func(ctx context.Context, input []byte) (output []byte, err error), error)
+		Init() (IManager, error)
+		SelectServeMenus(menuNames ...string) IManager
+		DisableMenu(name string) IManager
 	}
 	IMenu interface {
 		IInstance
 		Name() string
-		SwaggerOption(SwaggerOption) IMenu
-		swaggerOption() SwaggerOption
 		isDataWrapper() bool
+		Manager() IManager
+		Cookware() ICookware
+		setManager(m IManager, id uint32)
+		ID() uint32
+		orderDish(context.Context, *delivery.Order)
 	}
 	iMenu[D ICookware] interface {
 		IMenu
@@ -78,41 +94,41 @@ type (
 		initWithoutFields(iMenu[D], D)
 		setName(name string)
 		setCookware(D)
-		Cookware() D
+		cookware() D
 		Dependency() D
 		pushDish(iDish[D]) int
 		Dishes() []iDish[D]
 	}
 	ISet interface {
+		IInstance
 		Name() string
 		Menu() IMenu
+		Tree() []ISet
 	}
 	iSet[D ICookware] interface {
 		ISet
 		iCookbook[D]
 		init(menu iMenu[D], group iSet[D], parent iSet[D], name string)
-		Tree() []iSet[D]
+		tree() []iSet[D]
 		menu() iMenu[D]
 	}
 	IDish interface {
 		Name() string
 		FullName() string
 		IO() (any, any)
-		Desc() string
-		OperationId() string
-		Summary() string
-		Tags() []string
 		Id() uint32
 		Menu() IMenu
+		Cookware() ICookware
 		Sets() []ISet
-		Security() []string
+		Tags() reflect.StructTag
+		cookByte(ctx context.Context, inputData []byte) (outputData []byte, err error)
+		CookAny(ctx context.Context, input any) (output any, err error)
 	}
 	iDish[D ICookware] interface {
 		IDish
 		iCookbook[D]
 		init(iCookbook[D], iDish[D], string, reflect.StructTag)
-		ServeHttp() (method string, urlParams []string, handler http.HandlerFunc)
-		urlAndMethod() (url string, urlParams, queryParams []paramType, method string, queryParamsRequired []string)
+		refreshCooker()
 	}
 	IContextWithSession interface {
 		context.Context
@@ -134,7 +150,7 @@ type (
 		traceableCookware() ITraceableCookware
 		startTrace(name string, id string, input any) ITraceSpan
 		logSideEffect(instanceName string, toLog []any) (IContext[D], ITraceSpan)
-		FromWeb() *webBundle
+		FromWeb() IWebBundle
 		GetCtx() context.Context
 		TraceSpan() ITraceSpan
 		servedWeb()
@@ -176,6 +192,7 @@ type (
 		IMenu
 		GetActionsForModel(any) (status string, actions []IPipelineAction)
 		GetActionsForStatus(status string) []IPipelineAction
+		NewModel() IPipelineModel
 	}
 	iPipeline[D IPipelineCookware[M], M IPipelineModel] interface {
 		IPipeline
@@ -197,6 +214,9 @@ type (
 		IDish
 		Status() PipelineStatus
 		ModelToMap(model IPipelineModel) map[string]string
+		ExecByIdAny(ctx context.Context, input any, ids ...any) (output any, err error)
+		WillCreateModel() bool
+		Pipeline() IPipeline
 	}
 	iPipelineAction[D IPipelineCookware[M], M IPipelineModel] interface {
 		IPipelineAction
@@ -204,7 +224,3 @@ type (
 		initAction(parent iCookbook[D], act iPipelineAction[D, M], name string, tags reflect.StructTag)
 	}
 )
-
-func (w WebErr) Error() string {
-	return w.Err.Error()
-}

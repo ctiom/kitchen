@@ -2,6 +2,7 @@ package kitchen
 
 import (
 	"reflect"
+	"sync"
 )
 
 var (
@@ -28,10 +29,13 @@ func (s *SetBase[D]) init(p iMenu[D], group, parent iSet[D], name string) {
 	s.self = group
 	s.name = name
 	s.instance = group
+	s.concurrentLimit = new(int32)
+	s.running = new(int32)
+	s.locker = &sync.Mutex{}
 	if parent != nil {
-		s.parentSet = parent.Tree()
+		s.parentSet = parent.tree()
 	}
-	s.nodes = iterateStruct(group, p, group, p.Cookware())
+	s.nodes = iterateStruct(group, p, group, p.cookware())
 }
 
 func (s *SetBase[D]) OverridePath(path string) *SetBase[D] {
@@ -54,6 +58,15 @@ func (s SetBase[D]) Name() string {
 	return s.name
 }
 
-func (s SetBase[D]) Tree() []iSet[D] {
+func (s SetBase[D]) tree() []iSet[D] {
 	return append([]iSet[D]{s.self}, s.parentSet...)
+}
+
+func (s SetBase[D]) Tree() []ISet {
+	nodes := s.tree()
+	res := make([]ISet, len(nodes))
+	for i, node := range nodes {
+		res[i] = node
+	}
+	return res
 }

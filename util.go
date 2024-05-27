@@ -1,10 +1,11 @@
 package kitchen
 
 import (
-	"regexp"
-	"strings"
-
+	"fmt"
 	"github.com/iancoleman/strcase"
+	"reflect"
+	"strconv"
+	"strings"
 )
 
 func ContainsValueInSlice(slice []string, value string) bool {
@@ -16,33 +17,59 @@ func ContainsValueInSlice(slice []string, value string) bool {
 	return false
 }
 
-func findUrlParamPatterns(input string) []string {
-	// Define a regular expression pattern to match strings between curly braces
-	re := regexp.MustCompile(`\{([^}]+)\}`)
-
-	// Find all matches in the input string
-	matches := re.FindAllString(input, -1)
-
-	return matches
+type nameAndPos struct {
+	name string
+	pos  int
 }
 
-func combineAndRemoveDuplicates(arr1, arr2 []paramType) []paramType {
-	uniqueElements := make(map[string]paramType)
-
-	for _, element := range arr1 {
-		uniqueElements[element.Name] = element
+func DishUrlAndMethod(dish IDish) (url string, urlParams, queryParams [][2]string, method string, queryParamsRequired []string, webQueryParamMap []nameAndPos, webUrlParamMap []int) {
+	var (
+		input any
+		param string
+	)
+	input, _ = dish.IO()
+	switch input.(type) {
+	case string:
+		urlParams = append(urlParams, [2]string{"{p1}", ""})
+		method = setValueIfEmpty(method, "GET")
+	default:
+		iType := reflect.TypeOf(input)
+		if iType != nil {
+			method = setValueIfEmpty(method, "POST")
+			if iType.Kind() == reflect.Ptr {
+				iType = iType.Elem()
+			}
+			if iType.Kind() == reflect.Struct {
+				for i := 0; i < iType.NumField(); i++ {
+					if param = iType.Field(i).Tag.Get("urlParam"); param != "" {
+						urlParams = append(urlParams, [2]string{fmt.Sprintf("{%s}", param), iType.Field(i).Tag.Get("desc")})
+						webUrlParamMap = append(webUrlParamMap, i)
+					} else if param = iType.Field(i).Tag.Get("queryParam"); param != "" {
+						queryParams = append(queryParams, [2]string{param, iType.Field(i).Tag.Get("desc")})
+						if mandate := iType.Field(i).Tag.Get("required"); mandate != "" {
+							mandateValue, err := strconv.ParseBool(mandate)
+							if err != nil {
+								mandateValue = false
+							}
+							if mandateValue {
+								queryParamsRequired = append(queryParamsRequired, iType.Field(i).Name)
+							}
+						}
+						webQueryParamMap = append(webQueryParamMap, nameAndPos{name: param, pos: i})
+					}
+				}
+			}
+		} else {
+			method = setValueIfEmpty(method, "GET")
+		}
 	}
-
-	for _, element := range arr2 {
-		uniqueElements[element.Name] = element
+	switch dish.Name() {
+	case "GET", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT", "POST", "UPDATE", "DELETE", "PUT":
+		method = dish.Name()
+	default:
+		url = strcase.ToSnake(dish.Name())
 	}
-
-	var combined []paramType
-	for _, element := range uniqueElements {
-		combined = append(combined, element)
-	}
-
-	return combined
+	return url, urlParams, queryParams, method, queryParamsRequired, webQueryParamMap, webUrlParamMap
 }
 
 func Ternary[T any](condition bool, trueVal, falseVal T) T {

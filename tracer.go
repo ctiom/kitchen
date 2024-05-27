@@ -6,15 +6,16 @@ import (
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"time"
+	"math/rand"
+	"strconv"
 )
 
 var (
 	TraceIdGenerator = traceId
 )
 
-func traceId() int64 {
-	return time.Now().UnixNano()
+func traceId() string {
+	return strconv.FormatInt(rand.Int63n(999999999), 36)
 }
 
 type ChainTraceableCookware []ITraceableCookware

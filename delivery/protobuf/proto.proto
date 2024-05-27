@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option go_package = "github.com/preform/kitchen/delivery/deliveryProto";
+
+message Order {
+  bytes input = 1;
+  int64 deadline = 2;
+  uint64 id = 3;
+  uint32 nodeId = 4;
+  uint32 menuId = 5;
+  uint32 dishId = 6;
+}
+
+message Deliverable {
+  bytes output = 1;
+  string error = 2;
+  uint64 orderId = 3;
+  uint32 nodeId = 4;
+}
+
+message NodeStatus {
+  string host = 1;
+  repeated uint32 serveMenuIds = 2;
+  int64 sendTime = 3;
+  double cpuUsage = 4;
+  uint32 processedInMinute = 5;
+  uint32 nodeId = 6;
+  int32 loading = 7;
+  uint32 memoryMB = 8;
+  uint32 cpuCore = 9;
+  uint32 repPort = 10;
+  uint32 failCount = 11;
+  bool offline = 12;
+}
+
+message ChainStatus {
+  repeated NodeStatus nodeStatus = 1;
+  repeated uint32 leaderRank = 2;
+}
