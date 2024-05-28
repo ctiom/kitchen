@@ -11,7 +11,7 @@ import (
 
 var (
 	mainServers = make([]ILogistic, 1)
-	nodeServers = make([]ILogistic, 2)
+	nodeServers = make([]ILogistic, 3)
 )
 
 func init() {

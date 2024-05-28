@@ -167,6 +167,10 @@ func (a Dish[D, I, O]) Id() uint32 {
 	return a.id
 }
 
+func (a Dish[D, I, O]) Input() any {
+	return a.newInput()
+}
+
 func (a Dish[D, I, O]) IO() (any, any) {
 	var (
 		o O

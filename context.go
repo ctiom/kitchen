@@ -2,9 +2,6 @@ package kitchen
 
 import (
 	"context"
-	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 type Context[D ICookware] struct {
@@ -19,50 +16,28 @@ type Context[D ICookware] struct {
 	inherited    IContextWithSession
 	node         IDishServe
 	tracerSpan   ITraceSpan
-	WebBundle    *webBundle
 	webContext   *webContext
-}
-
-type webBundle struct {
-	RequestBody []byte
-	Request     *http.Request
-	Response    http.ResponseWriter
-}
-
-func (w *webBundle) GetRequestUrlParams() map[string]string {
-	return mux.Vars(w.Request)
-}
-
-func (w *webBundle) GetRequestQueryParams() (queryParam map[string]string) {
-	queryParam = make(map[string]string)
-	for k, v := range w.Request.URL.Query() {
-		queryParam[k] = v[0]
-	}
-	return
 }
 
 type webContext struct {
 	context.Context
+	cookware     ICookware
 	hasServedWeb bool
-	ch           chan struct{}
+	ch           <-chan struct{}
 	err          error
+	bundle       IWebBundle
 }
 
-func newWebContext(ctx context.Context) *webContext {
-	wc := &webContext{Context: ctx}
-	wc.ch = make(chan struct{})
-	go func() {
-		<-ctx.Done()
-		if !wc.hasServedWeb {
-			close(wc.ch)
-		}
-	}()
+func NewWebContext(ctx context.Context, bundle IWebBundle, cookware ICookware) *webContext {
+	wc := &webContext{Context: ctx, bundle: bundle, cookware: cookware}
+	wc.ch = ctx.Done()
 	return wc
 }
 
 func (c *webContext) servedWeb() {
 	c.hasServedWeb = true
 	c.err = c.Context.Err()
+	c.ch = make(chan struct{})
 }
 
 func (c webContext) Done() <-chan struct{} {
@@ -108,8 +83,11 @@ func (c Context[D]) traceableCookware() ITraceableCookware {
 	return c.traceableDep
 }
 
-func (c Context[D]) FromWeb() *webBundle {
-	return c.WebBundle
+func (c Context[D]) FromWeb() IWebBundle {
+	if c.webContext != nil {
+		return c.webContext.bundle
+	}
+	return nil
 }
 
 func (c Context[D]) GetCtx() context.Context {
@@ -120,8 +98,12 @@ func (c *Context[D]) startTrace(name string, id string, input any) ITraceSpan {
 	c.Context = context.WithValue(c.Context, "kitchenDishId", id)
 	if c.traceableDep != nil {
 		c.Context, c.tracerSpan = c.traceableDep.StartTrace(c.Context, id, name, input)
-		if c.WebBundle != nil && len(c.WebBundle.RequestBody) != 0 {
-			c.tracerSpan.SetAttributes("webReqBody", string(c.WebBundle.RequestBody))
+
+		if c.webContext != nil {
+			body, err := c.webContext.bundle.Body()
+			if err == nil && len(body) != 0 {
+				c.tracerSpan.SetAttributes("webReqBody", string(body))
+			}
 		}
 		return c.tracerSpan
 	}

@@ -2,9 +2,7 @@ package kitchen
 
 import (
 	"fmt"
-	"math/rand"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"sync/atomic"
 )
@@ -22,9 +20,8 @@ type cookbook[D ICookware, I any, O any] struct {
 	asyncAfterListenHandlers      []AfterListenHandlers[D, I, O]
 	asyncAfterListenHandlersExtra [][]any
 	inherited                     []iCookbook[D]
-	concurrent                    int64
-	running                       int64
-	concurrentCache               *int64
+	concurrentLimit               *int32
+	running                       *int32
 	locker                        *sync.Mutex
 	nodes                         []iCookbook[D]
 	fullName                      string
@@ -108,45 +105,25 @@ func (r cookbook[D, I, O]) emitAfterCook(ctx IContext[D], input, output any, err
 	}
 }
 
-func (r cookbook[D, I, O]) concurrentLimit() int64 {
-	return r.concurrent
-}
-
-func (r *cookbook[D, I, O]) ConcurrentLimit(limit int64) {
-	r.concurrent = limit
-}
-
-// get limit
-func (r *cookbook[D, I, O]) getConcurrentLimit() int64 {
-	if r.concurrentCache == nil {
-		var limit = r.concurrentLimit()
-		if limit == 0 {
-			for _, ev := range r.inherited {
-				limit = ev.concurrentLimit()
-				if limit != 0 {
-					break
-				}
+func (r *cookbook[D, I, O]) ConcurrentLimit(limit int32) {
+	if atomic.LoadInt32(r.concurrentLimit) < limit {
+		defer func() {
+			if atomic.LoadInt32(r.running) < limit {
+				r.locker.TryLock()
+				r.locker.Unlock()
 			}
-		}
-		r.concurrentCache = &limit
-		r.locker = &sync.Mutex{}
+		}()
 	}
-	return *r.concurrentCache
+	atomic.StoreInt32(r.concurrentLimit, limit)
 }
 
-func (r *cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (sess *dishServing) {
+func (r cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (sess *dishServing) {
 	sess = r.newServing(input) //&dishServing{ctx: ctx, Input: input}
 	if r.isTraceable {
-		sess.tracerSpan = ctx.startTrace(r.fullName, strconv.FormatInt(rand.Int63n(999999999), 36), input)
+		sess.tracerSpan = ctx.startTrace(r.fullName, TraceIdGenerator(), input)
 	}
 	if len(ctx.Session(sess)) == 1 {
-		var limit = r.getConcurrentLimit()
-		if limit != 0 {
-			if atomic.AddInt64(&r.running, 1) >= limit {
-				r.locker.Lock()
-			}
-			sess.unlocker = r.releaseLimit
-		}
+		sess.unlocker = r.ifLockThis()
 		if panicRecover {
 			defer func() {
 				if rec := recover(); rec != nil {
@@ -161,8 +138,54 @@ func (r *cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (
 	}
 	return
 }
+
+func (r *cookbook[D, I, O]) ifLock() func() {
+	if limit := atomic.LoadInt32(r.concurrentLimit); limit != 0 {
+		if atomic.AddInt32(r.running, 1) >= limit {
+			r.locker.Lock()
+		}
+		return r.releaseLimit
+	}
+	return nil
+}
+
+func (r *cookbook[D, I, O]) ifLockThis() func() {
+	var (
+		unlock  func()
+		unlocks = make([]func(), 0, len(r.inherited)+1)
+	)
+	for _, inherited := range r.inherited {
+		unlock = inherited.ifLock()
+		if unlock != nil {
+			unlocks = append(unlocks, unlock)
+		}
+	}
+	if unlock = r.ifLock(); unlock != nil {
+		unlocks = append(unlocks, unlock)
+	}
+	if len(unlocks) == 0 {
+		return nil
+	} else if len(unlocks) == 1 {
+		return unlocks[0]
+	} else {
+		return func() {
+			for _, unlock := range unlocks {
+				unlock()
+			}
+		}
+	}
+}
+
+func (b cookbook[D, I, O]) Nodes() []IInstance {
+	res := make([]IInstance, len(b.nodes))
+	for i, n := range b.nodes {
+		res[i] = n
+	}
+	return res
+}
+
 func (r *cookbook[D, I, O]) releaseLimit() {
-	if running := atomic.AddInt64(&r.running, -1); running == 0 || running == r.getConcurrentLimit()-1 {
+	if running := atomic.AddInt32(r.running, -1); running == 0 || running == atomic.LoadInt32(r.concurrentLimit)-1 {
 		_ = r.locker.TryLock()
 		r.locker.Unlock()
 	}

@@ -2,7 +2,6 @@ package kitchen
 
 import (
 	"context"
-	"net/http"
 )
 
 type ContextForTest[D ICookware] struct {
@@ -12,7 +11,7 @@ type ContextForTest[D ICookware] struct {
 	DummyDish     iDish[D]
 	DummySets     []iSet[D]
 	DummyMenu     iMenu[D]
-	webBundle     *webBundle
+	webBundle     IWebBundle
 }
 
 func (c *ContextForTest[D]) Session(serve ...IDishServe) []IDishServe {
@@ -60,16 +59,12 @@ func (c ContextForTest[D]) logSideEffect(instanceName string, toLog []any) (ICon
 	return nil, nil
 }
 
-func (c ContextForTest[D]) FromWeb() *webBundle {
+func (c ContextForTest[D]) FromWeb() IWebBundle {
 	return c.webBundle
 }
 
-func (c *ContextForTest[D]) SetWebBundle(body []byte, req *http.Request, resp http.ResponseWriter) {
-	c.webBundle = &webBundle{
-		RequestBody: body,
-		Request:     req,
-		Response:    resp,
-	}
+func (c *ContextForTest[D]) SetWebBundle(body []byte, bundle IWebBundle) {
+	c.webBundle = bundle
 }
 
 func (c ContextForTest[D]) TraceSpan() ITraceSpan {

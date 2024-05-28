@@ -10,7 +10,7 @@ import (
 
 func TestWebContextNormal(t *testing.T) {
 	dummyWebCtx, cancel := context.WithCancel(context.Background())
-	webCtx := newWebContext(context.WithValue(dummyWebCtx, "test1", 1))
+	webCtx := NewWebContext(context.WithValue(dummyWebCtx, "test1", 1))
 	ctx := context.WithValue(webCtx, "test2", 2)
 	go func() {
 		done := ctx.Done()
@@ -28,7 +28,7 @@ func TestWebContextNormal(t *testing.T) {
 
 func TestWebContextAbnormal(t *testing.T) {
 	dummyWebCtx, cancel := context.WithCancel(context.Background())
-	ctx := newWebContext(context.WithValue(dummyWebCtx, "test", 1))
+	ctx := NewWebContext(context.WithValue(dummyWebCtx, "test", 1))
 	go func() {
 		done := ctx.Done()
 		<-done

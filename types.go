@@ -26,7 +26,7 @@ type (
 		Body() ([]byte, error)
 		Url() *url.URL
 		UrlParams() map[string]string
-		Headers() any
+		Headers() http.Header
 		Raw() any
 		Response() http.ResponseWriter
 	}
@@ -115,6 +115,7 @@ type (
 	IDish interface {
 		Name() string
 		FullName() string
+		Input() any
 		IO() (any, any)
 		Id() uint32
 		Menu() IMenu

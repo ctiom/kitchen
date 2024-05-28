@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+option go_package = "proto/testProto";
+
+message CappuccinoInput {
+  string milk = 1;
+  string beans = 2;
+}
+
+message CappuccinoOutput {
+  string cappuccino = 1;
+}
+
+message TiramisuInput {
+  string cheese = 1;
+  string wine = 2;
+  string coffee = 3;
+}
+
+message TiramisuOutput {
+  string tiramisu = 1;
+}
+
+message SetInput {
+  CappuccinoInput cappuccino = 1;
+  TiramisuInput tiramisu = 2;
+}
+
+message SetOutput {
+  CappuccinoOutput cappuccino = 1;
+  TiramisuOutput tiramisu = 2;
+}

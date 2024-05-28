@@ -1,9 +1,11 @@
-package kitchen
+package kitchenWeb
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/preform/kitchen"
+	"github.com/preform/kitchen/web/routerHelper"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -13,8 +15,29 @@ import (
 	"github.com/iancoleman/strcase"
 )
 
-type ISwaggerType interface {
-	ToSwaggerType(any, map[string]any) (string, []paramType)
+type swaggerMenuWrapper struct {
+	kitchen.IMenu
+	option SwaggerOption
+}
+
+type iMenuWithSwagger interface {
+	kitchen.IMenu
+	swaggerOption() SwaggerOption
+}
+
+func (w swaggerMenuWrapper) swaggerOption() SwaggerOption {
+	return w.option
+}
+
+func MenuWithSwaggerOption(menu kitchen.IMenu, option SwaggerOption) kitchen.IMenu {
+	return &swaggerMenuWrapper{
+		IMenu:  menu,
+		option: option,
+	}
+}
+
+type IOpenApiType interface {
+	ToSwaggerType(any, map[string]any) (string, [][2]string)
 }
 
 type ISwaggerRoute interface {
@@ -34,38 +57,15 @@ type SwaggerOption struct {
 
 type swaggerType struct {
 	Name      string
-	UrlParams []paramType
+	UrlParams [][2]string
 	Body      any
-}
-
-type paramType struct {
-	Name string
-	Desc string
-}
-
-func NewParamType(name, desc string) paramType {
-	return paramType{
-		Name: name,
-		Desc: desc,
-	}
-}
-
-func NewParamTypeFromMap(paramtypemap map[string]string) []paramType {
-	paramTypes := make([]paramType, 0)
-	for k, v := range paramtypemap {
-		paramTypes = append(paramTypes, paramType{
-			Name: k,
-			Desc: v,
-		})
-	}
-	return paramTypes
 }
 
 var (
 	swaggerTypes = map[reflect.Type]swaggerType{}
 )
 
-func RegisterSwaggerType(t reflect.Type, name string, urlParams []paramType, body any) {
+func RegisterSwaggerType(t reflect.Type, name string, urlParams [][2]string, body any) {
 	swaggerTypes[t] = swaggerType{
 		Name:      name,
 		UrlParams: urlParams,
@@ -73,12 +73,14 @@ func RegisterSwaggerType(t reflect.Type, name string, urlParams []paramType, bod
 	}
 }
 
-func MakeSwagger(name string, origin []string, basePath, version string, menu ...IMenu) ([]byte, error) {
+func MakeOpenApi(name string, origin []string, basePath, version string, menus ...kitchen.IMenu) ([]byte, error) {
 	var (
-		api     = map[string]any{}
-		types   = map[string]any{}
-		res     map[string]any
-		servers = []map[string]any{}
+		api       = map[string]any{}
+		types     = map[string]any{}
+		res       map[string]any
+		servers   = []map[string]any{}
+		thisApi   map[string]any
+		thisTypes map[string]any
 	)
 	for _, o := range origin {
 		servers = append(servers, map[string]any{
@@ -95,34 +97,38 @@ func MakeSwagger(name string, origin []string, basePath, version string, menu ..
 		"paths":      api,
 		"components": map[string]any{"schemas": types},
 	}
-	for _, w := range menu {
-		opt := w.swaggerOption()
-
-		if opt.Security != nil {
-			securities := map[string]any{}
-			for k, v := range opt.Security {
-				opt.SecurityMethod = k
-				securities[k] = v
+	for _, menu := range menus {
+		if w, ok := menu.(iMenuWithSwagger); ok {
+			opt := w.swaggerOption()
+			if opt.Security != nil {
+				securities := map[string]any{}
+				for k, v := range opt.Security {
+					opt.SecurityMethod = k
+					securities[k] = v
+				}
+				res["components"].(map[string]any)["securitySchemes"] = securities
 			}
-			res["components"].(map[string]any)["securitySchemes"] = securities
+			opt.UrlPrefix = strings.TrimRight(strings.TrimLeft(opt.UrlPrefix, "/"), "/")
+			thisApi, thisTypes = nodeToSwagger(w, strings.Split(opt.UrlPrefix, "/"), opt)
+		} else {
+			thisApi, thisTypes = nodeToSwagger(menu, []string{})
 		}
-		opt.UrlPrefix = strings.TrimRight(strings.TrimLeft(opt.UrlPrefix, "/"), "/")
-		a, t := w.ToSwagger(strings.Split(opt.UrlPrefix, "/"), opt)
-		for k, v := range a {
+
+		for k, v := range thisApi {
 			api[k] = v
 		}
-		for k, v := range t {
+		for k, v := range thisTypes {
 			types[k] = v
 		}
 	}
 	return json.MarshalIndent(res, "", "  ")
 }
 
-func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) (api map[string]any, types map[string]any) {
+func nodeToSwagger(w kitchen.IInstance, prefix []string, options ...SwaggerOption) (api map[string]any, types map[string]any) {
 	var (
 		ok         bool
-		group      iSet[D]
-		action     iDish[D]
+		group      kitchen.ISet
+		action     kitchen.IDish
 		option     SwaggerOption
 		subTypeKey string
 	)
@@ -138,9 +144,9 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 	} else {
 		option = options[0]
 	}
-	for _, node := range w.nodes {
-		if group, ok = any(node).(iSet[D]); ok {
-			nodeApi, nodeTypes := node.ToSwagger(append(prefix, strcase.ToSnake(group.Name())), options...)
+	for _, node := range w.Nodes() {
+		if group, ok = any(node).(kitchen.ISet); ok {
+			nodeApi, nodeTypes := nodeToSwagger(node, append(prefix, strcase.ToSnake(group.Name())), options...)
 			for k, v := range nodeApi {
 				api[k] = v
 			}
@@ -152,24 +158,24 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 			for k, v := range nodeApi {
 				api["/"+strings.Join(append(prefix, k), "/")] = v
 			}
-		} else if action, ok = any(node).(iDish[D]); ok {
+		} else if action, ok = any(node).(kitchen.IDish); ok {
 			var (
 				i, o       = action.IO()
 				iT, oT     = reflect.TypeOf(i), reflect.TypeOf(o)
 				body       = map[string]any{}
 				parameters = []map[string]any{}
 			)
-			url, urlParams, queryParams, method, queryParamsRequired := action.urlAndMethod()
+			url, urlParams, method, _ := routerHelper.DishUrlAndMethod(action, routerHelper.DefaultUrlParamWrapper)
 			if url == "" {
 				urlParamNames := make([]string, 0)
 				for _, up := range urlParams {
-					urlParamNames = append(urlParamNames, up.Name)
+					urlParamNames = append(urlParamNames, up[0])
 				}
 				url = "/" + strings.Join(append(prefix, urlParamNames...), "/")
 			} else {
 				urlParamNames := make([]string, 0)
 				for _, up := range urlParams {
-					urlParamNames = append(urlParamNames, up.Name)
+					urlParamNames = append(urlParamNames, up[0])
 				}
 				url = "/" + strings.Join(append(append(prefix, url), urlParamNames...), "/")
 			}
@@ -179,10 +185,10 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 					oT = oT.Elem()
 				}
 				var (
-					menu    IMenu
+					menu    kitchen.IMenu
 					oSchema map[string]any
 				)
-				if oS, ok := o.(ISwaggerType); ok {
+				if oS, ok := o.(IOpenApiType); ok {
 					ref, _ := oS.ToSwaggerType(o, types)
 					oSchema = map[string]any{
 						"$ref": ref,
@@ -251,14 +257,15 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 
 				if !option.SkipWrapperCheck {
 					menu = w.Menu()
-					if menu != nil && menu.isDataWrapper() && oT != nil {
+					_, isDataWrapper := menu.Cookware().(kitchen.IWebCookwareWithDataWrapper)
+					if menu != nil && isDataWrapper && oT != nil {
 						var (
 							dummyIn  = reflect.New(oT).Interface()
 							dummyErr = errors.New("I am a dummy error")
 							wV       reflect.Value
 							wVT      reflect.Type
 						)
-						okWrapped, _ := any(menu.(iMenu[D]).Dependency()).(IWebCookwareWithDataWrapper).WrapWebOutput(dummyIn, nil)
+						okWrapped, _ := any(menu.Cookware()).(kitchen.IWebCookwareWithDataWrapper).WrapWebOutput(dummyIn, nil)
 						if okWrapped != nil {
 							wV = reflect.ValueOf(okWrapped)
 							wVT = wV.Type()
@@ -301,10 +308,10 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 
 				var (
 					ref                    string
-					urlParams, queryParams []paramType
+					urlParams, queryParams [][2]string
 					queryParamsRequired    []string
 				)
-				if iS, ok := i.(ISwaggerType); ok {
+				if iS, ok := i.(IOpenApiType); ok {
 					ref, urlParams = iS.ToSwaggerType(i, types)
 					body["requestBody"] = map[string]any{
 						"content": map[string]any{
@@ -369,9 +376,9 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 
 				if len(urlParams) != 0 {
 					if patternUrlParams := findUrlParamPatterns(url); len(patternUrlParams) > 0 {
-						patternUrlParamsTypes := make([]paramType, 0)
+						patternUrlParamsTypes := make([][2]string, 0)
 						for _, pup := range patternUrlParams {
-							patternUrlParamsTypes = append(patternUrlParamsTypes, paramType{Name: pup})
+							patternUrlParamsTypes = append(patternUrlParamsTypes, [2]string{pup, ""})
 						}
 						urlParams = combineAndRemoveDuplicates(patternUrlParamsTypes, urlParams)
 					}
@@ -397,10 +404,10 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 					)
 					for _, p := range queryParams {
 						params = append(params, map[string]any{
-							"name":        p,
+							"name":        p[0],
 							"in":          "query",
-							"required":    ContainsValueInSlice(queryParamsRequired, p.Name),
-							"description": "",
+							"required":    ContainsValueInSlice(queryParamsRequired, p[0]),
+							"description": p[1],
 							"schema": map[string]any{
 								"type": "string",
 							},
@@ -411,9 +418,11 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 				}
 			}
 
-			if len(action.Security()) > 0 {
+			tags := action.Tags()
+			secure := tags.Get("security")
+			if len(secure) > 0 {
 				security := make([]map[string][]string, 0)
-				for _, s := range action.Security() {
+				for _, s := range strings.Split(secure, ",") {
 					security = append(security, map[string][]string{s: make([]string, 0)})
 				}
 				body["security"] = security
@@ -424,44 +433,32 @@ func (w cookbook[D, I, O]) ToSwagger(prefix []string, options ...SwaggerOption) 
 					},
 				}
 			}
-			body["description"] = action.Desc()
-			body["operationId"] = action.OperationId()
-			body["summary"] = action.Summary()
-			body["tags"] = action.Tags()
+			body["description"] = tags.Get("desc")
+			body["operationId"] = tags.Get("operationId")
+			body["summary"] = tags.Get("summary")
+			body["tags"] = tags.Get("tags")
 
 			m := map[string]any{
 				strings.ToLower(method): body,
 			}
 			if patternUrlParams := findUrlParamPatterns(url); len(patternUrlParams) > 0 {
-				patternUrlParamsTypes := make([]paramType, 0)
+				patternUrlParamsTypes := make([][2]string, 0)
 				for _, pup := range patternUrlParams {
-					patternUrlParamsTypes = append(patternUrlParamsTypes, paramType{Name: pup})
+					patternUrlParamsTypes = append(patternUrlParamsTypes, [2]string{pup, ""})
 				}
 				urlParams = combineAndRemoveDuplicates(patternUrlParamsTypes, urlParams)
 			}
 			for _, p := range urlParams {
 				parameters = append(parameters, map[string]any{
 					// "name":        p[1 : len(p)-1],
-					"name":        p.Name[1 : len(p.Name)-1],
+					"name":        p[0][1 : len(p[0])-1],
 					"in":          "path",
 					"required":    true,
-					"description": p.Desc,
+					"description": p[1],
 					"schema": map[string]any{
 						"type": "string",
 					},
 				})
-			}
-			for _, p := range queryParams {
-				parameters = append(parameters, map[string]any{
-					"name":        p.Name,
-					"in":          "query",
-					"required":    ContainsValueInSlice(queryParamsRequired, p.Name),
-					"description": p.Desc,
-					"schema": map[string]any{
-						"type": "string",
-					},
-				})
-
 			}
 			body["parameters"] = parameters
 			/*if url == "" {
@@ -609,7 +606,7 @@ var (
 	genericPathRx = regexp.MustCompile(`[\[\,]\*?(?:\[[0-9]*\])?\*?([^,\[\]]+\.)[a-zA-Z0-9_]+`)
 )
 
-func swaggerParseStruct(t reflect.Type, allDefs map[string]any) (typeKey string, urlParams, queryParams []paramType, queryParamsRequired []string) {
+func swaggerParseStruct(t reflect.Type, allDefs map[string]any) (typeKey string, urlParams, queryParams [][2]string, queryParamsRequired []string) {
 	var (
 		properties map[string]any
 		required   = []string{}
@@ -646,7 +643,7 @@ func swaggerParseStruct(t reflect.Type, allDefs map[string]any) (typeKey string,
 	return
 }
 
-func swaggerParseStructFields(t reflect.Type, allDefs map[string]any) (properties map[string]any, urlParams, queryParams []paramType, required, queryParamsRequired []string) {
+func swaggerParseStructFields(t reflect.Type, allDefs map[string]any) (properties map[string]any, urlParams, queryParams [][2]string, required, queryParamsRequired []string) {
 
 	properties = map[string]any{}
 	for i := 0; i < t.NumField(); i++ {
@@ -655,11 +652,11 @@ func swaggerParseStructFields(t reflect.Type, allDefs map[string]any) (propertie
 			continue
 		}
 		if f.Tag.Get("urlParam") != "" {
-			urlParams = append(urlParams, paramType{Name: f.Tag.Get("urlParam"), Desc: f.Tag.Get("desc")})
+			urlParams = append(urlParams, [2]string{f.Tag.Get("urlParam"), f.Tag.Get("desc")})
 			continue
 		}
 		if f.Tag.Get("queryParam") != "" {
-			queryParams = append(queryParams, paramType{Name: f.Tag.Get("queryParam"), Desc: f.Tag.Get("desc")})
+			queryParams = append(queryParams, [2]string{f.Tag.Get("queryParam"), f.Tag.Get("desc")})
 			if mandate := f.Tag.Get("required"); mandate != "" {
 				mandateValue, err := strconv.ParseBool(mandate)
 				if err != nil {
@@ -698,7 +695,7 @@ func swaggerParseStructFields(t reflect.Type, allDefs map[string]any) (propertie
 				fieldInstance = reflect.New(fType).Elem().Interface()
 				subTypeKey    string
 			)
-			if fS, ok := fieldInstance.(ISwaggerType); ok {
+			if fS, ok := fieldInstance.(IOpenApiType); ok {
 				pp["$ref"], _ = fS.ToSwaggerType(fieldInstance, allDefs)
 			} else if swaggerType, ok := swaggerTypes[fType]; ok {
 				pp["$ref"] = "#/components/schemas/" + swaggerType.Name
@@ -747,7 +744,7 @@ func swaggerParseStructFields(t reflect.Type, allDefs map[string]any) (propertie
 						var (
 							fieldInstance = reflect.New(fType.Elem()).Elem().Interface()
 						)
-						if fS, ok := fieldInstance.(ISwaggerType); ok {
+						if fS, ok := fieldInstance.(IOpenApiType); ok {
 							ref, _ := fS.ToSwaggerType(fieldInstance, allDefs)
 							pp["items"] = map[string]any{
 								"$ref": ref,
