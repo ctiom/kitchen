@@ -2,7 +2,6 @@ package kitchenWeb
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/go-preform/kitchen"
 	"github.com/go-preform/kitchen/web/routerHelper"
@@ -49,10 +48,9 @@ type hasTypeForExport interface {
 }
 
 type SwaggerOption struct {
-	Security         map[string]any
-	SecurityMethod   string
-	UrlPrefix        string
-	SkipWrapperCheck bool
+	Security       map[string]any
+	SecurityMethod string
+	UrlPrefix      string
 }
 
 type swaggerType struct {
@@ -185,7 +183,6 @@ func nodeToSwagger(w kitchen.IInstance, prefix []string, options ...SwaggerOptio
 					oT = oT.Elem()
 				}
 				var (
-					menu    kitchen.IMenu
 					oSchema map[string]any
 				)
 				if oS, ok := o.(IOpenApiType); ok {
@@ -251,41 +248,6 @@ func nodeToSwagger(w kitchen.IInstance, prefix []string, options ...SwaggerOptio
 									},
 								},
 							},
-						}
-					}
-				}
-
-				if !option.SkipWrapperCheck {
-					menu = w.Menu()
-					_, isDataWrapper := menu.Cookware().(kitchen.IWebCookwareWithDataWrapper)
-					if menu != nil && isDataWrapper && oT != nil {
-						var (
-							dummyIn  = reflect.New(oT).Interface()
-							dummyErr = errors.New("I am a dummy error")
-							wV       reflect.Value
-							wVT      reflect.Type
-						)
-						okWrapped, _ := any(menu.Cookware()).(kitchen.IWebCookwareWithDataWrapper).WrapWebOutput(dummyIn, nil)
-						if okWrapped != nil {
-							wV = reflect.ValueOf(okWrapped)
-							wVT = wV.Type()
-							if wVT.Kind() == reflect.Ptr {
-								wV = wV.Elem()
-								wVT = wVT.Elem()
-							}
-							if wVT.Kind() == reflect.Struct {
-								oSchema = swaggerParseWrapper(wVT, wV, dummyIn, dummyErr, oSchema)
-								body["responses"] = map[string]any{
-									"200": map[string]any{
-										"description": "OK",
-										"content": map[string]any{
-											"application/json": map[string]any{
-												"schema": oSchema,
-											},
-										},
-									},
-								}
-							}
 						}
 					}
 				}

@@ -36,9 +36,9 @@ type (
 		ICookware
 		Inherit(ICookware) ICookware
 	}
-	IWebCookwareWithDataWrapper interface {
-		ICookware
-		WrapWebOutput(output any, err error) (wrappedOutput any, httpStatus int)
+	ICookwareFactory[D ICookware] interface {
+		New() D
+		Put(any)
 	}
 	ITraceableCookware interface {
 		StartTrace(ctx context.Context, id string, spanName string, input any) (context.Context, ITraceSpan)
@@ -61,9 +61,9 @@ type (
 		ifLock() func()
 		inherit(...iCookbook[D])
 		emitAfterCook(IContext[D], any, any, error)
-		emitAfterExec(IContext[D], any, any, error)
 		isTraceableDep() bool
 		isInheritableDep() bool
+		menu() iMenu[D]
 	}
 	IKitchen interface {
 		Order(dish IDish, input any) (output interface{}, err error)
@@ -80,20 +80,20 @@ type (
 	IMenu interface {
 		IInstance
 		Name() string
-		isDataWrapper() bool
 		Manager() IManager
 		Cookware() ICookware
 		setManager(m IManager, id uint32)
 		ID() uint32
 		orderDish(context.Context, *delivery.Order)
+		cookwareRecycle(any)
 	}
 	iMenu[D ICookware] interface {
 		IMenu
 		iCookbook[D]
-		init(iMenu[D], D)
-		initWithoutFields(iMenu[D], D)
+		init(iMenu[D], any)
+		initWithoutFields(iMenu[D], any)
 		setName(name string)
-		setCookware(D)
+		setCookware(any)
 		cookware() D
 		Dependency() D
 		pushDish(iDish[D]) int
@@ -155,6 +155,7 @@ type (
 		GetCtx() context.Context
 		TraceSpan() ITraceSpan
 		servedWeb()
+		served()
 	}
 	IPipelineContext[D IPipelineCookware[M], M IPipelineModel] interface {
 		IContext[D]

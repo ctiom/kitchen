@@ -18,8 +18,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
-	"runtime/pprof"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -562,8 +560,6 @@ func init() {
 	})
 	OrderWorker.Pending.TestA.SetCooker(func(ctx kitchen.IContext[DummyWorkerCookware], input int) (output int, err error) {
 		return input + 1, nil
-	}).AfterCook(func(ctx kitchen.IContext[DummyWorkerCookware], input, output int, err error) {
-		input++
 	})
 	OrderWorker.Util.TestC.SetCooker(func(ctx kitchen.IContext[DummyWorkerCookware], input int) (output int, err error) {
 		var (
@@ -576,17 +572,6 @@ func init() {
 	}).AfterCook(func(ctx kitchen.IContext[DummyWorkerCookwareWithTracer], input, output int, err error) {
 		input++
 	})
-	go func() {
-		ticker := time.NewTicker(time.Millisecond * 500)
-		fp, _ := os.OpenFile("heap.prof", os.O_CREATE|os.O_RDWR, 0666)
-		for {
-			select {
-			case <-ticker.C:
-				p := pprof.Lookup("heap")
-				_ = p.WriteTo(fp, 1)
-			}
-		}
-	}()
 
 }
 func BenchmarkExec(b *testing.B) {
@@ -603,18 +588,6 @@ func BenchmarkExecWithTracer(b *testing.B) {
 	ctx := context.Background()
 	for i := 0; i < b.N; i++ {
 		if res, _ = OrderWorkerWithTracer.Pending.TestA.Exec(ctx, i); res != i+1 {
-			b.Fail()
-		}
-	}
-}
-func BenchmarkExecMem(b *testing.B) {
-	var (
-		res int
-	)
-	ctx := context.Background()
-	for i := 0; i < b.N; i++ {
-		if res, _ = OrderWorker.Util.TestC.Exec(ctx, i); res != 100000 {
-			fmt.Println(res)
 			b.Fail()
 		}
 	}

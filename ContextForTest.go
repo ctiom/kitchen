@@ -78,6 +78,8 @@ func (c ContextForTest[D]) GetCtx() context.Context {
 func (c *ContextForTest[D]) servedWeb() {
 }
 
+func (c *ContextForTest[D]) served() {}
+
 type PipelineContextForTest[D IPipelineCookware[M], M IPipelineModel] struct {
 	ContextForTest[D]
 	DummyTx IDbTx

@@ -147,6 +147,12 @@ func (c *Context[D]) servedWeb() {
 	}
 }
 
+func (c *Context[D]) served() {
+	if len(c.session) == 1 {
+		c.dish.menu().cookwareRecycle(c.cookware)
+	}
+}
+
 type PipelineContext[D IPipelineCookware[M], M IPipelineModel] struct {
 	Context[D]
 	tx IDbTx

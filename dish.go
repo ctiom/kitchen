@@ -17,7 +17,7 @@ import (
 type Dish[D ICookware, I any, O any] struct {
 	cookbook[D, I, O]
 	sets          []iSet[D]
-	menu          iMenu[D]
+	_menu         iMenu[D]
 	name          string
 	cooker        DishCooker[D, I, O]
 	rawCooker     DishCooker[D, I, O]
@@ -62,16 +62,16 @@ func (a *Dish[D, I, O]) init(parent iCookbook[D], action iDish[D], name string, 
 			setNames = append([]string{g.Name()}, setNames...)
 		}
 		a.inherit(set.menu())
-		a.menu = set.menu()
+		a._menu = set.menu()
 		if len(setNames) != 0 {
-			a.fullName = fmt.Sprintf("%s.%s.%s", a.menu.Name(), strings.Join(setNames, "."), a.name)
+			a.fullName = fmt.Sprintf("%s.%s.%s", a._menu.Name(), strings.Join(setNames, "."), a.name)
 		} else {
-			a.fullName = fmt.Sprintf("%s.%s", a.menu.Name(), a.name)
+			a.fullName = fmt.Sprintf("%s.%s", a._menu.Name(), a.name)
 		}
 	} else {
 		a.inherit(parent)
-		a.menu = any(parent).(iMenu[D])
-		a.fullName = fmt.Sprintf("%s.%s", a.menu.Name(), a.name)
+		a._menu = any(parent).(iMenu[D])
+		a.fullName = fmt.Sprintf("%s.%s", a._menu.Name(), a.name)
 	}
 	var (
 		input  I
@@ -87,8 +87,8 @@ func (a *Dish[D, I, O]) init(parent iCookbook[D], action iDish[D], name string, 
 	} else {
 		a.marshalOutput = newJsonUnmarshaler(output)
 	}
-	a.id = uint32(a.menu.pushDish(action))
-	a.isTraceable = a.menu.isTraceableDep()
+	a.id = uint32(a._menu.pushDish(action))
+	a.isTraceable = a._menu.isTraceableDep()
 	var (
 		iType = reflect.TypeOf((*I)(nil)).Elem()
 	)
@@ -193,8 +193,12 @@ func (a Dish[D, I, O]) Tags() reflect.StructTag {
 	return a.fieldTags
 }
 
+func (a Dish[D, I, O]) menu() iMenu[D] {
+	return a._menu
+}
+
 func (a Dish[D, I, O]) Menu() IMenu {
-	return a.menu
+	return a._menu
 }
 
 func (a Dish[D, I, O]) Sets() []ISet {
@@ -274,8 +278,8 @@ func (a *Dish[D, I, O]) SetCooker(cooker DishCooker[D, I, O]) *Dish[D, I, O] {
 		a.asyncChan = nil
 	}
 	a.rawCooker = cooker
-	if a.menu.Manager() != nil {
-		var mgr = a.menu.Manager()
+	if a._menu.Manager() != nil {
+		var mgr = a._menu.Manager()
 		a.cooker = func(ctx IContext[D], input I) (output O, err error) {
 			var (
 				handler func(ctx context.Context, input []byte) (output []byte, err error)
@@ -313,16 +317,16 @@ func (a *Dish[D, I, O]) PanicRecover(recover bool) *Dish[D, I, O] {
 }
 
 func (a Dish[D, I, O]) Cookware() ICookware {
-	return a.menu.Cookware()
+	return a._menu.Cookware()
 }
 
 func (a Dish[D, I, O]) cookware() D {
-	d := a.menu.cookware()
+	d := a._menu.cookware()
 	return d
 }
 
 func (a Dish[D, I, O]) Dependency() D {
-	d := a.menu.cookware()
+	d := a._menu.cookware()
 	return d
 }
 
@@ -432,7 +436,7 @@ func (a *Dish[D, I, O]) newCtx(ctx context.Context, cookware ...D) *Context[D] {
 	if c, ok = ctx.(*Context[D]); ok {
 		return c
 	}
-	c = &Context[D]{Context: ctx, menu: a.menu, sets: a.sets, dish: a}
+	c = &Context[D]{Context: ctx, menu: a._menu, sets: a.sets, dish: a}
 	var (
 		cw D
 	)
@@ -447,7 +451,7 @@ func (a *Dish[D, I, O]) newCtx(ctx context.Context, cookware ...D) *Context[D] {
 		}
 	}
 	if c.inherited, ok = ctx.(IContextWithSession); ok {
-		if a.menu.isInheritableDep() {
+		if a._menu.isInheritableDep() {
 			c.cookware = any(cw).(ICookwareInheritable).Inherit(c.inherited.RawCookware()).(D)
 		} else {
 			c.cookware = cw

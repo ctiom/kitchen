@@ -1,5 +1,9 @@
 # Kitchen Framework
 
+A golang framework for building progressive backend services.
+
+![](./docs/asset/cover.jpeg)
+
 ## Introduction
 
 Kitchen is a framework designed for building progressive, scalable services.

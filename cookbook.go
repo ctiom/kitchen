@@ -29,7 +29,6 @@ type cookbook[D ICookware, I any, O any] struct {
 	fullName                      string
 	isTraceable                   bool
 	isInheritableCookware         bool
-	isWebWrapperCookware          bool
 }
 
 var (
@@ -77,10 +76,6 @@ func (r *cookbook[D, I, O]) AfterCookAsync(handler AfterListenHandlers[D, I, O],
 
 func (r *cookbook[D, I, O]) inherit(ev ...iCookbook[D]) {
 	r.inherited = append(r.inherited, ev...)
-}
-
-func (r cookbook[D, I, O]) emitAfterExec(ctx IContext[D], input, output any, err error) {
-	r.emitAfterCook(ctx, input, output, err)
 }
 
 func (r cookbook[D, I, O]) emitAfterCook(ctx IContext[D], input, output any, err error) {
@@ -152,6 +147,7 @@ func (r cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (s
 					} else {
 						fmt.Printf("panicRecover from panic: \n%v\n%s", r, string(debug.Stack()))
 					}
+					sess.finish(nil, fmt.Errorf("panic: %v", rec))
 				}
 			}()
 		}

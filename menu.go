@@ -14,27 +14,29 @@ var (
 
 type MenuBase[WPtr iMenu[D], D ICookware] struct {
 	cookbook[D, any, any]
-	name           string
-	menuCookware   D
-	dishes         []iDish[D]
-	dishCnt        uint32
-	path           *string
-	manager        IManager
-	idUnderManager uint32
+	name            string
+	menuCookware    D
+	cookwareFactory ICookwareFactory[D]
+	dishes          []iDish[D]
+	dishCnt         uint32
+	path            *string
+	manager         IManager
+	idUnderManager  uint32
+	recycleCookware func(any)
 }
 
-func InitMenu[W iMenu[D], D ICookware](menuPtr W, bundle D) W {
+func InitMenu[W iMenu[D], D ICookware](menuPtr W, bundle any) W {
 	menuPtr.init(menuPtr, bundle)
 	return menuPtr
 }
 
-func (b *MenuBase[W, D]) init(w iMenu[D], bundle D) {
+func (b *MenuBase[W, D]) init(w iMenu[D], bundle any) {
 	b.cookbook.init()
 	b.initWithoutFields(w, bundle)
 	b.nodes = iterateStruct(w, w, nil, bundle)
 }
 
-func iterateStruct[D ICookware](s any, parentMenu iMenu[D], set iSet[D], bundle D) []iCookbook[D] {
+func iterateStruct[D ICookware](s any, parentMenu iMenu[D], set iSet[D], bundle any) []iCookbook[D] {
 	var (
 		fieldType reflect.StructField
 		sValue    = reflect.ValueOf(s).Elem()
@@ -70,6 +72,9 @@ func iterateStruct[D ICookware](s any, parentMenu iMenu[D], set iSet[D], bundle 
 }
 
 func (r MenuBase[W, D]) Cookware() ICookware {
+	if r.cookwareFactory != nil {
+		return r.cookwareFactory.New()
+	}
 	return r.menuCookware
 }
 
@@ -94,20 +99,19 @@ func (b *MenuBase[W, D]) OverridePath(path string) *MenuBase[W, D] {
 	return b
 }
 
-func (b *MenuBase[W, D]) initWithoutFields(w iMenu[D], bundle D) {
+func (b *MenuBase[W, D]) initWithoutFields(w iMenu[D], bundle any) {
 	var (
 		menuValue = reflect.ValueOf(w).Elem()
 		menuType  = menuValue.Type()
 	)
-	_, b.isTraceable = any(bundle).(ITraceableCookware)
+	w.setCookware(bundle)
+	_, b.isTraceable = any(b.menuCookware).(ITraceableCookware)
 	b.instance = w
 	b.name = menuType.Name()
 	_, b.isInheritableCookware = any(bundle).(ICookwareInheritable)
-	_, b.isWebWrapperCookware = any(bundle).(IWebCookwareWithDataWrapper)
 	b.concurrentLimit = new(int32)
 	b.running = new(int32)
 	b.locker = &sync.Mutex{}
-	w.setCookware(bundle)
 
 	w.setName(menuType.Name())
 }
@@ -133,6 +137,9 @@ func (b *MenuBase[W, D]) setName(name string) {
 func (b *MenuBase[W, D]) Menu() IMenu {
 	return b.instance.(IMenu)
 }
+func (b *MenuBase[W, D]) menu() iMenu[D] {
+	return b.instance.(iMenu[D])
+}
 
 func (b MenuBase[W, D]) Name() string {
 	if b.path != nil {
@@ -141,19 +148,58 @@ func (b MenuBase[W, D]) Name() string {
 	return b.name
 }
 
-func (b *MenuBase[W, D]) setCookware(cookware D) {
-	b.menuCookware = cookware
+type poolLike interface {
+	New() any
+	Put(any)
 }
 
-func (b *MenuBase[W, D]) isDataWrapper() bool {
-	return b.isWebWrapperCookware
+type poolLikeWrapper[D ICookware] struct {
+	poolLike
+}
+
+func (p poolLikeWrapper[D]) New() D {
+	return p.poolLike.New().(D)
+}
+
+func (p *poolLikeWrapper[D]) Put(d any) {
+	p.poolLike.Put(d)
+}
+
+func (b *MenuBase[W, D]) setCookware(cookware any) {
+	b.recycleCookware = func(any) {}
+	switch cookware.(type) {
+	case ICookwareFactory[D]:
+		f := cookware.(ICookwareFactory[D])
+		b.cookwareFactory = f
+		cookware = f.New()
+		b.recycleCookware = f.Put
+	case poolLike:
+		n := cookware.(poolLike)
+		b.cookwareFactory = &poolLikeWrapper[D]{poolLike: n}
+		b.menuCookware = n.New().(D)
+		b.recycleCookware = n.Put
+	case D:
+	default:
+		panic("cookware type not supported")
+	}
+	b.menuCookware = cookware.(D)
+}
+
+func (b *MenuBase[W, D]) cookwareRecycle(cookware any) {
+	b.recycleCookware(cookware)
 }
 
 func (b MenuBase[W, D]) Dependency() D {
+	if b.cookwareFactory != nil {
+		return b.cookwareFactory.New()
+	}
 	return b.menuCookware
 }
 
 func (b MenuBase[W, D]) cookware() D {
+	if b.cookwareFactory != nil {
+		return b.cookwareFactory.New()
+	}
 	return b.menuCookware
 }
 
