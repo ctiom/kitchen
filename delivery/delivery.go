@@ -2,7 +2,7 @@ package delivery
 
 import (
 	"context"
-	deliveryProto "github.com/preform/kitchen/delivery/protobuf"
+	deliveryProto "github.com/go-preform/kitchen/delivery/protobuf"
 )
 
 type Order struct {

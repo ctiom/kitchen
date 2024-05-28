@@ -2,8 +2,8 @@ package routerHelper
 
 import (
 	"fmt"
+	"github.com/go-preform/kitchen"
 	"github.com/iancoleman/strcase"
-	"github.com/preform/kitchen"
 	"reflect"
 	"strings"
 )

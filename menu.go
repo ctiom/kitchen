@@ -3,7 +3,7 @@ package kitchen
 import (
 	"context"
 	"errors"
-	"github.com/preform/kitchen/delivery"
+	"github.com/go-preform/kitchen/delivery"
 	"reflect"
 	"sync"
 )

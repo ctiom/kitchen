@@ -3,7 +3,7 @@ package kitchen
 import (
 	"context"
 	"database/sql"
-	"github.com/preform/kitchen/delivery"
+	"github.com/go-preform/kitchen/delivery"
 	"net/http"
 	"net/url"
 	"reflect"

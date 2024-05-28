@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/preform/kitchen"
-	testProto "github.com/preform/kitchen/test/proto"
+	"github.com/go-preform/kitchen"
+	testProto "github.com/go-preform/kitchen/test/proto"
 	"github.com/valyala/fasthttp"
 	"log"
 	"net/http"

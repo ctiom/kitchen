@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/preform/kitchen"
-	testProto "github.com/preform/kitchen/test/proto"
+	"github.com/go-preform/kitchen"
+	testProto "github.com/go-preform/kitchen/test/proto"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"

@@ -3,8 +3,8 @@ package kitchen
 import (
 	"context"
 	"errors"
+	"github.com/go-preform/kitchen/stringMap"
 	"github.com/iancoleman/strcase"
-	"github.com/preform/kitchen/stringMap"
 	"reflect"
 )
 

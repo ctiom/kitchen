@@ -3,7 +3,7 @@ package kitchenGrpc
 import (
 	"context"
 	"errors"
-	"github.com/preform/kitchen"
+	"github.com/go-preform/kitchen"
 	"google.golang.org/grpc"
 )
 

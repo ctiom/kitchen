@@ -1,7 +1,7 @@
-module github.com/preform/kitchen/examples/chain
+module github.com/go-preform/kitchen/examples/chain
 
 go 1.21
 
 require (
-	github.com/preform/kitchen v0.1.0
+	github.com/go-preform/kitchen v0.1.0
 )

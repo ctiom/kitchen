@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/preform/kitchen/delivery"
+	"github.com/go-preform/kitchen/delivery"
 	"reflect"
 	"runtime/debug"
 	"strings"

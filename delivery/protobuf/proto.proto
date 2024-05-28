@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/preform/kitchen/delivery/deliveryProto";
+option go_package = "github.com/go-preform/kitchen/delivery/deliveryProto";
 
 message Order {
   bytes input = 1;

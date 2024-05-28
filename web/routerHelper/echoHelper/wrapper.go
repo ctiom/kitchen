@@ -2,10 +2,10 @@ package echoHelper
 
 import (
 	"context"
+	"github.com/go-preform/kitchen"
+	"github.com/go-preform/kitchen/web/routerHelper"
 	"github.com/iancoleman/strcase"
 	"github.com/labstack/echo"
-	"github.com/preform/kitchen"
-	"github.com/preform/kitchen/web/routerHelper"
 	"net/http"
 	"net/url"
 	"strings"

@@ -1,10 +1,10 @@
 package muxHelper
 
 import (
+	"github.com/go-preform/kitchen"
+	"github.com/go-preform/kitchen/web/routerHelper"
 	"github.com/gorilla/mux"
 	"github.com/iancoleman/strcase"
-	"github.com/preform/kitchen"
-	"github.com/preform/kitchen/web/routerHelper"
 	"net/http"
 	"strings"
 )

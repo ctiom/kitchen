@@ -3,9 +3,9 @@ package fasthttpHelper
 import (
 	"context"
 	"github.com/fasthttp/router"
+	"github.com/go-preform/kitchen"
+	"github.com/go-preform/kitchen/web/routerHelper"
 	"github.com/iancoleman/strcase"
-	"github.com/preform/kitchen"
-	"github.com/preform/kitchen/web/routerHelper"
 	"github.com/valyala/fasthttp"
 	"net/http"
 	"net/url"

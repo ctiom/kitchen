@@ -1,4 +1,4 @@
-module github.com/preform/kitchen
+module github.com/go-preform/kitchen
 
 go 1.21
 
