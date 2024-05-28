@@ -25,6 +25,7 @@ func initSet[D ICookware](menu iMenu[D], group iSet[D], parent iSet[D], name str
 }
 
 func (s *SetBase[D]) init(p iMenu[D], group, parent iSet[D], name string) {
+	s.cookbook.init()
 	s._menu = p
 	s.self = group
 	s.name = name

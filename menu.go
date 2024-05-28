@@ -29,6 +29,7 @@ func InitMenu[W iMenu[D], D ICookware](menuPtr W, bundle D) W {
 }
 
 func (b *MenuBase[W, D]) init(w iMenu[D], bundle D) {
+	b.cookbook.init()
 	b.initWithoutFields(w, bundle)
 	b.nodes = iterateStruct(w, w, nil, bundle)
 }

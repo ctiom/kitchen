@@ -127,22 +127,22 @@ func TestInit(t *testing.T) {
 	})
 	input := 1
 	//if traffic growth up, we can have multiple instance and implement grpc & load balance inside Exec
-	res, err := OrderWorker.Pending.TestA.Exec(context.Background(), input)
+	res, err := OrderWorker.Pending.TestA.Cook(context.Background(), input)
 	assert.Equal(t, []int{3, 1, 2, 3}, callStack) //triggered all 3 events, and order again since we nested call order.Util.TestC
 	assert.Equal(t, input+2, res)
 	assert.Nil(t, err)
 
-	res, err = OrderWorker.Pending.TestGroup.TestB.Exec(context.Background(), res)
+	res, err = OrderWorker.Pending.TestGroup.TestB.Cook(context.Background(), res)
 	assert.Nil(t, err)
 	assert.Equal(t, input+3, res)
 	assert.Equal(t, []int{3, 1, 2, 3, 2, 3}, callStack) //triggered all again except order.Exist.TestA
 
-	err = OrderWorker.Pending.TestAsync.ExecAsync(context.Background(), 1, func(i int, err error) {
+	err = OrderWorker.Pending.TestAsync.CookAsync(context.Background(), 1, func(i int, err error) {
 		assert.Equal(t, 1000, i)
 		assert.Nil(t, err)
 	}) //run as async
 	assert.Nil(t, err)
-	res, err = OrderWorker.Pending.TestAsync.Exec(context.Background(), 1) //run as sync
+	res, err = OrderWorker.Pending.TestAsync.Cook(context.Background(), 1) //run as sync
 	assert.Nil(t, err)
 	assert.Equal(t, 1000, res)
 

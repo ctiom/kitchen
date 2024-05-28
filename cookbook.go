@@ -24,10 +24,23 @@ type cookbook[D ICookware, I any, O any] struct {
 	running                       *int32
 	locker                        *sync.Mutex
 	nodes                         []iCookbook[D]
+	checkIfLock                   func() func()
+	checkIfLockThis               func() func()
 	fullName                      string
 	isTraceable                   bool
 	isInheritableCookware         bool
 	isWebWrapperCookware          bool
+}
+
+var (
+	nilIfLock = func() func() {
+		return nil
+	}
+)
+
+func (r *cookbook[D, I, O]) init() {
+	r.checkIfLock = nilIfLock
+	r.checkIfLockThis = nilIfLock
 }
 
 func (r cookbook[D, I, O]) Menu() IMenu {
@@ -115,6 +128,13 @@ func (r *cookbook[D, I, O]) ConcurrentLimit(limit int32) {
 		}()
 	}
 	atomic.StoreInt32(r.concurrentLimit, limit)
+	if limit != 0 {
+		r.checkIfLock = r._ifLock
+		r.checkIfLockThis = r._ifLockThis
+	} else {
+		r.checkIfLock = nilIfLock
+		r.checkIfLockThis = nilIfLock
+	}
 }
 
 func (r cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (sess *dishServing) {
@@ -138,8 +158,11 @@ func (r cookbook[D, I, O]) start(ctx IContext[D], input I, panicRecover bool) (s
 	}
 	return
 }
-
 func (r *cookbook[D, I, O]) ifLock() func() {
+	return r.checkIfLock()
+}
+
+func (r *cookbook[D, I, O]) _ifLock() func() {
 	if limit := atomic.LoadInt32(r.concurrentLimit); limit != 0 {
 		if atomic.AddInt32(r.running, 1) >= limit {
 			r.locker.Lock()
@@ -150,6 +173,10 @@ func (r *cookbook[D, I, O]) ifLock() func() {
 }
 
 func (r *cookbook[D, I, O]) ifLockThis() func() {
+	return r.checkIfLockThis()
+}
+
+func (r *cookbook[D, I, O]) _ifLockThis() func() {
 	var (
 		unlock  func()
 		unlocks = make([]func(), 0, len(r.inherited)+1)
@@ -191,8 +218,19 @@ func (r *cookbook[D, I, O]) releaseLimit() {
 	}
 }
 
+var (
+	servingPool = sync.Pool{
+		New: func() any {
+			return &dishServing{}
+		},
+	}
+)
+
 func (r *cookbook[D, I, O]) newServing(input I) *dishServing {
-	return &dishServing{Action: r.instance.(IDish), Input: input}
+	serving := servingPool.Get().(*dishServing)
+	serving.Action = r.instance.(IDish)
+	serving.Input = input
+	return serving
 }
 
 type dishServing struct {

@@ -47,7 +47,7 @@ func (a *Dish[D, I, O]) extractTags(tags reflect.StructTag, key string, fn func(
 }
 
 func (a *Dish[D, I, O]) init(parent iCookbook[D], action iDish[D], name string, tags reflect.StructTag) {
-
+	a.cookbook.init()
 	a.concurrentLimit = new(int32)
 	a.running = new(int32)
 	a.locker = &sync.Mutex{}
@@ -403,6 +403,7 @@ func (a *Dish[D, I, O]) doCook(cooker DishCooker[D, I, O], ctx IContext[D], inpu
 	}
 	a.emitAfterCook(ctx, input, output, err)
 	node.finish(output, err)
+	servingPool.Put(node)
 	return output, err
 }
 

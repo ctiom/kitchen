@@ -52,7 +52,7 @@ func newMenus() (*menus, []int) {
 	cnt := []int{0, 0, 0}
 	coffeeMenu := kitchen.InitMenu(new(CoffeeMenu), coffeeCookware{})
 	coffeeMenu.Cappuccino.SetCooker(func(ctx kitchen.IContext[coffeeCookware], input *testProto.CappuccinoInput) (*testProto.CappuccinoOutput, error) {
-		for i := 0; i < 3000000; i++ {
+		for i := 0; i < 1000000; i++ {
 			_ = i ^ 2 ^ 2 ^ 2 ^ 2
 		} //simulate cooking time
 		cnt[0]++
@@ -60,7 +60,7 @@ func newMenus() (*menus, []int) {
 	})
 	cakeMenu := kitchen.InitMenu(new(CakeMenu), cakeCookware{})
 	cakeMenu.Tiramisu.SetCooker(func(ctx kitchen.IContext[cakeCookware], input *testProto.TiramisuInput) (*testProto.TiramisuOutput, error) {
-		for i := 0; i < 3000000; i++ {
+		for i := 0; i < 1000000; i++ {
 			_ = i ^ 2 ^ 2 ^ 2 ^ 2
 		} //simulate cooking time
 		cnt[1]++
@@ -146,7 +146,7 @@ func main() {
 		Handler: func(ctx *fasthttp.RequestCtx) {
 			switch string(ctx.Path()) {
 			case "/cappuccino_local":
-				for i := 0; i < 3000000; i++ {
+				for i := 0; i < 1000000; i++ {
 					_ = i ^ 2 ^ 2 ^ 2 ^ 2
 				} //simulate cooking time
 				input := &testProto.CappuccinoInput{Beans: "Arabica", Milk: "Whole"}

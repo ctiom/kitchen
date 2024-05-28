@@ -124,14 +124,14 @@ func (c *Context[D]) logSideEffect(instanceName string, toLog []any) (IContext[D
 
 func (c *Context[D]) Session(nodes ...IDishServe) []IDishServe {
 	if len(nodes) != 0 {
-		c.node = nodes[0]
 		if c.inherited != nil {
+			c.node = nodes[0]
 			return c.inherited.Session(nodes...)
 		}
-		c.session = append(c.session, nodes...)
+		c.session = nodes
 	} else {
 		if c.inherited != nil {
-			return c.inherited.Session(nodes...)
+			return c.inherited.Session()
 		}
 	}
 	return c.session
