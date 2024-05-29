@@ -311,6 +311,14 @@ var (
 	}
 )
 
+var (
+	deliverablePool = sync.Pool{
+		New: func() interface{} {
+			return &deliveryProto.Deliverable{}
+		},
+	}
+)
+
 func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx context.Context, ackFn func(), responseFn func(data []byte, err error) error) {
 	//LogErr("orderIdAndResponseFn", nil, n.server.nodeId, n.Id, orderId)
 	ctx, n.handleOrderCancelers[orderId] = context.WithDeadline(n.server.ctx, deadline)
@@ -321,11 +329,10 @@ func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx con
 			n.pushMessageCh <- data
 			//atomic.AddUint32(&traceRing[orderId*10+uint64(n.Id)], 4)
 		}, func(data []byte, err error) error {
-			resp := &deliveryProto.Deliverable{
-				OrderId: orderId,
-				NodeId:  n.server.nodeId,
-				Output:  data,
-			}
+			resp := deliverablePool.Get().(*deliveryProto.Deliverable)
+			resp.OrderId = orderId
+			resp.NodeId = n.server.nodeId
+			resp.Output = data
 			if err != nil {
 				resp.Error = err.Error()
 			}
