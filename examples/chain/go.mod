@@ -3,7 +3,7 @@ module github.com/go-preform/kitchen/examples/chain
 go 1.21
 
 require (
-	github.com/go-preform/kitchen v0.1.2-r2
+	github.com/go-preform/kitchen v0.1.2-r5
 	github.com/valyala/fasthttp v1.54.0
 )
 

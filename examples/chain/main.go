@@ -149,8 +149,8 @@ func main() {
 		Handler: func(ctx *fasthttp.RequestCtx) {
 			switch string(ctx.Path()) {
 			case "/disable":
-				mgr.DisableMenu(string(ctx.QueryArgs().Peek("name")))
-				ctx.WriteString("Disabled")
+				mgr.DisableMenu(string(ctx.QueryArgs().Peek("menu")))
+				ctx.WriteString("Disabled:" + string(ctx.QueryArgs().Peek("menu")))
 			case "/cappuccino_local":
 				for i := 0; i < 1000000; i++ {
 					_ = i ^ 2 ^ 2 ^ 2 ^ 2

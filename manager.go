@@ -45,6 +45,12 @@ func (m *Manager) SelectServeMenus(menuNamesNilIsAll ...string) IManager {
 
 func (m *Manager) DisableMenu(name string) IManager {
 	m.lock.Lock()
+	if m.serveMenuNames == nil {
+		m.serveMenuNames = make([]string, len(m.menuById))
+		for i, menu := range m.menuById {
+			m.serveMenuNames[i] = menu.Name()
+		}
+	}
 	for i, n := range m.serveMenuNames {
 		if n == name {
 			m.serveMenuNames = append(m.serveMenuNames[:i], m.serveMenuNames[i+1:]...)
