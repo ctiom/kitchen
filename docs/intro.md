@@ -20,7 +20,7 @@ they are now in network calls—an absolute nightmare.
 
 ### Monolith
 
-I love monoliths. If we can’t foresee a million users or thousands of concurrency, who needs microservices?
+I do love monoliths. If we can’t foresee a million users or thousands of concurrency, who needs microservices?
 It’s way easier to develop, deploy, and maintain. No need to worry about service discovery, inter-service
 portals, network drops, latency, blocking, timeouts, etc. And as hardware performance and CI/CD techniques
 improve, a monolith on a 100+ core server with proper pipelines can well support thousands of transactions per second
