@@ -88,13 +88,13 @@ func (m *Manager) getOrderHandlers() []func(context.Context, *delivery.Order) {
 		handlers = make([]func(context.Context, *delivery.Order), len(m.menuById))
 	)
 	m.lock.Lock()
-	if len(m.serveMenuNames) > 0 {
-		for _, menuName := range m.serveMenuNames {
-			handlers[m.menus[menuName].ID()] = m.menuById[m.menus[menuName].ID()].orderDish
-		}
-	} else {
+	if m.serveMenuNames == nil {
 		for _, menu := range m.menuById {
 			handlers[menu.ID()] = menu.orderDish
+		}
+	} else {
+		for _, menuName := range m.serveMenuNames {
+			handlers[m.menus[menuName].ID()] = m.menuById[m.menus[menuName].ID()].orderDish
 		}
 	}
 	m.lock.Unlock()

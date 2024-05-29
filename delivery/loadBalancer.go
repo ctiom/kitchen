@@ -43,7 +43,7 @@ func (l *loadBalancer) UpdateHandlers(handlers []IHandler) {
 		id = l.nodeId - 1
 		l.getId = func(skipNodeId ...uint32) uint32 {
 			//LogErr("###########", nil, l.nodeId, id)
-			return id
+			return math.MaxUint32
 		}
 		return
 	} else if n == 1 {
