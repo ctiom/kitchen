@@ -8,7 +8,7 @@ of being simple, efficient, and scalable: keep the system in a monolithic archit
 It’s usually considered as the advanced choice by most developers. Indeed, yes, it’s the ultimate solution. And the team
 can enjoy some benefits other than performance and scalability, like independent deployment, minimized downtime,
 flexible technology stack, etc. I can understand why developers are so keen on it. However, the trade-offs are
-also obvious: complexity and cost. It’s just too hard! Every time a developer asks me to use a microservices
+also obvious: complexity and cost. It’s just too hard! Every time, some of developers suggest to use a microservices
 architecture, I question whether we can do it right. To be honest, even I am not that confident, especially
 after certain updates. Please take a look at this if you question it.
 
