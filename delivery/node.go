@@ -184,6 +184,7 @@ var (
 	ErrInvalidResponse = errors.New("invalid response")
 	ErrOrderAckTimeout = errors.New("order ack timeout")
 	ErrOrderTimeout    = errors.New("order timeout")
+	ErrMenuNotServing  = errors.New("menu not serving")
 )
 
 var (
@@ -324,6 +325,9 @@ func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx con
 				OrderId: orderId,
 				NodeId:  n.server.nodeId,
 				Output:  data,
+			}
+			if err != nil {
+				resp.Error = err.Error()
 			}
 			data, _ = proto.Marshal(resp)
 			//atomic.AddUint32(&traceRing[orderId*10+uint64(n.Id)], 32)
