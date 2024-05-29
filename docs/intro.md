@@ -14,7 +14,7 @@ after certain updates. Please take a look at this if you question it.
 
 [<img src="./asset/intro_ms1.png" alt="microservice by KRAZAM" style="width:100%;"/>](https://www.youtube.com/watch?v=y8OnoxKotPQ)
 
-I can't stop laughing every time I watch it, but it's so true. You may read the comments and also [ThePrimeTime's reaction](https://www.youtube.com/watch?v=s-vJcOfrvi0) to it.
+I can't stop laughing every time I watch it, but it's bloody true. You may read the comments and the [ThePrimeTime's reaction](https://www.youtube.com/watch?v=s-vJcOfrvi0) to it.
 That’s not hard to understand, right? Just consider the spaghetti code you’ve ever written and imagine
 they are now in network calls—an absolute nightmare.
 
