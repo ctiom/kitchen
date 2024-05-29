@@ -94,17 +94,29 @@ plugins for turning the placeholders into web APIs, generating OpenAPI schema, a
 To have a framework for real battles, I try hard to put performance into first place, minimize the 
 use of reflect or map. It makes the local call overhead is as low as <400ns, and <10000ns for foreign calls.
 
-The network helper is based on [ZeroMQ](https://github.com/go-zeromq/zmq4), which is a high-throughput, 
-low-latency networking library.
-It’s way faster than HTTP and gRPC, and I’ve further improved it by implementing a 2-way data socket.
+The default network helper is based on [ZeroMQ](https://github.com/go-zeromq/zmq4), which is a high-throughput networking library.
+It’s fast, and I’ve further improved it by implementing a 2-way data socket.
 Every separated node will have a pool of TCP connections for sending requests, but unlike traditional 
 network calls, they don’t wait/block. And every node will have a listening port handled with a single 
 goroutine; then requests will pass to the corresponding goroutine through channels. After the request 
 is processed, the response will be sent back through the request connections targeted to the requester.
 This two-way data flow enabled a true async call, which is optimal for microservices use cases.
 
-
-![](./asset/intro_chart1.png)
+```shell
+goos: linux
+goarch: amd64
+pkg: github.com/go-preform/kitchen/examples/benchmark
+cpu: 13th Gen Intel(R) Core(TM) i9-13900K
+BenchmarkGrpc
+BenchmarkGrpc-32           	  299900	      3834 ns/op
+BenchmarkZMQGo
+BenchmarkZMQGo-32          	  148636	      8263 ns/op
+BenchmarkZMQGoRouter
+BenchmarkZMQGoRouter-32    	  102322	     11248 ns/op
+BenchmarkZMQGo2Way
+BenchmarkZMQGo2Way-32      	  668388	      1807 ns/op
+PASS
+```
 
 Note that the network helper is interchangeable, you can implement other helper to suit the requirement, 
 for example a MQ adapter is ideal for services require the highest level of durability.
@@ -115,6 +127,9 @@ The network helper is designed to be configurable at runtime; services can easil
 into horizontal monoliths. Or they can even toggle feature scopes at runtime to become single responsibility
 services. The changes can be made by CI/CD pipeline or even APIs without restarting. The core logic can stay
 unchanged as long as the dependencies are managed properly and the placeholders are properly defined.
+
+
+![](./asset/intro_chart1.png)
 
 ### Manageable call stack
 
