@@ -39,7 +39,7 @@ scalable than an ordinary monolith. But from my understanding, it’s not that i
 
 <img src="./asset/intro_cmp1.png" alt="introduction caparison" style="width:100%;"/>
 
-The overhead of coding is still there no matter if you use Restful, gRPC, or MQ. It requires a lot more
+The overhead of coding is still there no matter if you use RESTful, gRPC, or MQ. It requires a lot more
 effort to manage the communication. And obviously, the performance overhead is there since it uses network
 calls regardless of the fact that they are in the same process. Even if they can overcome that with some
 helper like a fake client/server, it still increases the cost of implementation/splitting. Moreover, in
