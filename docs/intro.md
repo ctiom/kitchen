@@ -1,6 +1,6 @@
 # My take to microservices vs monoliths
 
-As a backend developer and system architect, the biggest choice I have to make is how to balance the trade-offs
+As a backend developer and system architect, the biggest decision I have to make is how to balance the trade-offs
 of being simple, efficient, and scalable: keep the system in a monolithic architecture or split it into microservices.
 
 ### Microservices
