@@ -5,7 +5,7 @@ of being simple, efficient, and scalable: keep the system in a monolithic archit
 
 ### Microservices
 
-It’s usually considered the advanced choice by most developers. Indeed, yes, it’s the ultimate solution. And the team
+It’s usually considered as the advanced choice by most developers. Indeed, yes, it’s the ultimate solution. And the team
 can enjoy some benefits other than performance and scalability, like independent deployment, minimized downtime,
 flexible technology stack, etc. I can understand why developers are so keen on it. However, the trade-offs are
 also obvious: complexity and cost. It’s just too hard! Every time a developer asks me to use a microservices
