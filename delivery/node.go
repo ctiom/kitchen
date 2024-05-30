@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -194,11 +195,17 @@ var (
 			return &deliveryProto.Order{}
 		},
 	}
+	orderDataBufferPool = sync.Pool{
+		New: func() any {
+			return bytes.NewBuffer(orderHeader)
+		},
+	}
+	responseDataBufferPool = sync.Pool{
+		New: func() any {
+			return bytes.NewBuffer([]byte{MSG_FLAG_ORDER_RESULT})
+		},
+	}
 )
-
-//var (
-//	traceRing = make([]uint32, DefaultOrderHandleConcurrentLimit*10000)
-//)
 
 func (n *node) OrderRequestAsClient(ctx context.Context, menuId, dishId uint16, input []byte) (output []byte, err error) {
 	var (
@@ -228,17 +235,21 @@ func (n *node) OrderRequestAsClient(ctx context.Context, menuId, dishId uint16, 
 		return
 	}
 	LogDebug("send req")
+	orderDataBuffer := orderDataBufferPool.Get().(*bytes.Buffer)
+	orderDataBuffer.Write(data)
 	r, err := n.getReqSock()
 	if err != nil {
 		LogErr("node OrderRequestAsClient getReqSock", err)
 		return
 	}
-	err = r.Send(zmq.NewMsg(append(orderHeader, data...)))
+	err = r.Send(zmq.NewMsg(orderDataBuffer.Bytes()))
 	if err != nil {
 		LogErr("node OrderRequestAsClient Send", err)
 		return
 	}
 	n.cleanReqSock(r)
+	orderDataBuffer.Truncate(1)
+	orderDataBufferPool.Put(orderDataBuffer)
 	for {
 		select {
 		case outputResp, ok := <-resCh:
@@ -337,6 +348,8 @@ func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx con
 				resp.Error = err.Error()
 			}
 			data, _ = proto.Marshal(resp)
+			responseDataBuffer := responseDataBufferPool.Get().(*bytes.Buffer)
+			responseDataBuffer.Write(data)
 			//atomic.AddUint32(&traceRing[orderId*10+uint64(n.Id)], 32)
 			//toDeliverPool.Put(resp)
 			LogDebug("send outputResp")
@@ -345,8 +358,12 @@ func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx con
 				LogErr("Connect", err)
 				return err
 			}
-			defer n.cleanReqSock(r)
-			return r.Send(zmq.NewMsg(append([]byte{MSG_FLAG_ORDER_RESULT}, data...)))
+			defer func() {
+				n.cleanReqSock(r)
+				responseDataBuffer.Truncate(1)
+				responseDataBufferPool.Put(responseDataBuffer)
+			}()
+			return r.Send(zmq.NewMsg(responseDataBuffer.Bytes()))
 		}
 
 }
