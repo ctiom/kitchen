@@ -524,7 +524,9 @@ func (s *server) pushStatusLoop() {
 			}
 			beforeStat = stat
 		} else {
-			LogErr("get cpu stat", err)
+			if !strings.Contains(err.Error(), "not implemented") {
+				LogErr("get cpu stat", err)
+			}
 		}
 	}
 	for {
