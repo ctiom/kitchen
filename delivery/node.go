@@ -24,6 +24,7 @@ type node struct {
 	handleOrderCancelers []context.CancelFunc
 	orderResponses       []orderWaiter
 	pushMessageCh        chan []byte
+	pushAckCh            chan *bytes.Buffer
 	url                  string
 	status               *deliveryProto.NodeStatus
 	reqSocketInUse       *int32
@@ -315,14 +316,9 @@ cancel:
 var (
 	orderAckPool = sync.Pool{
 		New: func() interface{} {
-			data := make([]byte, 13)
-			data[0] = MSG_FLAG_ORDER_ACK
-			return data
+			return bytes.NewBuffer([]byte{MSG_FLAG_ORDER_ACK})
 		},
 	}
-)
-
-var (
 	deliverablePool = sync.Pool{
 		New: func() interface{} {
 			return &deliveryProto.Deliverable{}
@@ -334,10 +330,10 @@ func (n *node) orderIdAndResponseFn(orderId uint64, deadline time.Time) (ctx con
 	//LogErr("orderIdAndResponseFn", nil, n.server.nodeId, n.Id, orderId)
 	ctx, n.handleOrderCancelers[orderId] = context.WithDeadline(n.server.ctx, deadline)
 	return ctx, func() {
-			data := orderAckPool.Get().([]byte)
-			binary.BigEndian.PutUint32(data[1:], n.server.nodeId)
-			binary.BigEndian.PutUint64(data[5:], orderId)
-			n.pushMessageCh <- data
+			data := orderAckPool.Get().(*bytes.Buffer)
+			_ = binary.Write(data, binary.BigEndian, n.server.nodeId)
+			_ = binary.Write(data, binary.BigEndian, orderId)
+			n.pushAckCh <- data
 			//atomic.AddUint32(&traceRing[orderId*10+uint64(n.Id)], 4)
 		}, func(data []byte, err error) error {
 			resp := deliverablePool.Get().(*deliveryProto.Deliverable)
@@ -400,16 +396,24 @@ func (n *node) pushMessage(bytes []byte) error {
 }
 
 func (n *node) pushMessageAndCleanConnLoop() {
+	n.pushAckCh = make(chan *bytes.Buffer, 100)
 	n.pushMessageCh = make(chan []byte, 100)
 	var (
 		err             error
 		cleanConnTicker = time.NewTicker(DefaultOrderTimeout)
 		msg             []byte
+		buff            *bytes.Buffer
 		ok              bool
 		closed          bool
 		toClose         []zmq.Socket
 		pl              int32
+		req             zmq.Socket
 	)
+	req, err = n.getReqSock()
+	if err != nil {
+		LogErr("pushMessageAndCleanConnLoop getReqSock", err)
+		return
+	}
 	for {
 		select {
 		case <-n.server.ctx.Done():
@@ -440,16 +444,20 @@ func (n *node) pushMessageAndCleanConnLoop() {
 					pl = atomic.AddInt32(n.reqSocketInPool, -1)
 				}
 			}
+		case buff, ok = <-n.pushAckCh:
+			if !ok {
+				return
+			}
+			err = req.Send(zmq.NewMsg(buff.Bytes()))
+			buff.Truncate(1)
+			orderAckPool.Put(buff)
 		case msg, ok = <-n.pushMessageCh:
 			if !ok {
 				return
 			}
-			err = n.pushMessage(msg)
+			err = req.Send(zmq.NewMsg(msg))
 			if err != nil {
 				LogErr("pushMessageAndCleanConnLoop", err)
-			}
-			if msg[0] == MSG_FLAG_ORDER_ACK {
-				orderAckPool.Put(msg)
 			}
 		}
 	}

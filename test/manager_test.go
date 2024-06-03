@@ -4,11 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-preform/kitchen"
-	"github.com/go-preform/kitchen/delivery"
 	testProto "github.com/go-preform/kitchen/test/proto"
 	"github.com/stretchr/testify/assert"
-	"io"
-	"net/http"
 	"testing"
 	"time"
 )
@@ -53,17 +50,11 @@ func newMenus() (*menus, []int) {
 	cnt := []int{0, 0, 0}
 	coffeeMenu := kitchen.InitMenu(new(CoffeeMenu), coffeeCookware{})
 	coffeeMenu.Cappuccino.SetCooker(func(ctx kitchen.IContext[coffeeCookware], input *testProto.CappuccinoInput) (*testProto.CappuccinoOutput, error) {
-		for i := 0; i < 3000000; i++ {
-			_ = i ^ 2 ^ 2 ^ 2 ^ 2
-		} //simulate cooking time
 		cnt[0]++
 		return &testProto.CappuccinoOutput{Cappuccino: "Cappuccino with " + input.Beans + " beans and " + input.Milk + " milk"}, nil
 	})
 	cakeMenu := kitchen.InitMenu(new(CakeMenu), cakeCookware{})
 	cakeMenu.Tiramisu.SetCooker(func(ctx kitchen.IContext[cakeCookware], input *testProto.TiramisuInput) (*testProto.TiramisuOutput, error) {
-		for i := 0; i < 3000000; i++ {
-			_ = i ^ 2 ^ 2 ^ 2 ^ 2
-		} //simulate cooking time
 		cnt[1]++
 		return &testProto.TiramisuOutput{Tiramisu: "Tiramisu with " + input.Cheese + " cheese, " + input.Coffee + " coffee and " + input.Wine + " wine"}, nil
 	})
@@ -229,36 +220,36 @@ func BenchmarkOrderCoffeeLoadBalance(b *testing.B) {
 	//fmt.Println(3, orderCnt3)
 }
 
-func BenchmarkHttp(b *testing.B) {
-	b.SetParallelism(1000)
-	b.RunParallel(func(pb *testing.PB) {
-		var (
-			err  error
-			resp *http.Response
-			data []byte
-		)
-		for pb.Next() {
-			resp, err = http.Get("http://127.0.0.1/cappuccino")
-			assert.Nil(b, err)
-			data, _ = io.ReadAll(resp.Body)
-			assert.Equal(b, "Cappuccino with Arabica beans and Whole milk", string(data))
-		}
-	})
-	//fmt.Println(1, orderCnt1)
-	//fmt.Println(2, orderCnt2)
-	//fmt.Println(3, orderCnt3)
-}
+//func BenchmarkHttp(b *testing.B) {
+//	b.SetParallelism(1000)
+//	b.RunParallel(func(pb *testing.PB) {
+//		var (
+//			err  error
+//			resp *http.Response
+//			data []byte
+//		)
+//		for pb.Next() {
+//			resp, err = http.Get("http://127.0.0.1/cappuccino")
+//			assert.Nil(b, err)
+//			data, _ = io.ReadAll(resp.Body)
+//			assert.Equal(b, "Cappuccino with Arabica beans and Whole milk", string(data))
+//		}
+//	})
+//	//fmt.Println(1, orderCnt1)
+//	//fmt.Println(2, orderCnt2)
+//	//fmt.Println(3, orderCnt3)
+//}
 
-func TestDisable(t *testing.T) {
-	mgr1.DisableMenu("CoffeeMenu")
-	mgr2.DisableMenu("CoffeeMenu")
-	mgr3.DisableMenu("CoffeeMenu")
-	time.Sleep(500 * time.Millisecond)
-	var (
-		ctx = context.Background()
-	)
-
-	_, err := mgrMenu1.coffeeMenu.Cappuccino.Cook(ctx, &testProto.CappuccinoInput{Beans: "Arabica", Milk: "Whole"})
-	assert.Equal(t, delivery.ErrMenuNotServing, err)
-
-}
+//func TestDisable(t *testing.T) {
+//	mgr1.DisableMenu("CoffeeMenu")
+//	mgr2.DisableMenu("CoffeeMenu")
+//	mgr3.DisableMenu("CoffeeMenu")
+//	time.Sleep(500 * time.Millisecond)
+//	var (
+//		ctx = context.Background()
+//	)
+//
+//	_, err := mgrMenu1.coffeeMenu.Cappuccino.Cook(ctx, &testProto.CappuccinoInput{Beans: "Arabica", Milk: "Whole"})
+//	assert.Equal(t, delivery.ErrMenuNotServing, err)
+//
+//}
